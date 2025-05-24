@@ -1,0 +1,224 @@
+import { Scene } from 'phaser';
+import { WordManager } from '../systems/WordManager';
+import { PhysicsManager } from '../systems/PhysicsManager';
+import { EffectManager } from '../systems/EffectManager';
+import { UIScene } from './UIScene';
+
+export class GameScene extends Scene {
+    private wordManager!: WordManager;
+    private physicsManager!: PhysicsManager;
+    private effectManager!: EffectManager;
+    private uiScene!: UIScene;
+    private isGameOver: boolean = false;
+    private currentWord: { text: string; blocks: MatterJS.BodyType[] } | null = null;
+
+    constructor() {
+        super('GameScene');
+    }
+
+    create(data: { difficulty?: string }) {
+        // Get reference to UI scene
+        this.uiScene = this.scene.get('UIScene') as UIScene;
+        
+        // Get difficulty settings from UI scene
+        const difficultySettings = this.uiScene.getDifficultySettings();
+        
+        // Initialize managers
+        this.effectManager = new EffectManager(this);
+        this.physicsManager = new PhysicsManager(this.matter.world, this);
+        this.wordManager = new WordManager(
+            this,
+            this.physicsManager,
+            this.effectManager,
+            difficultySettings
+        );
+        
+        console.log('Game started with difficulty:', data.difficulty || 'default');
+
+        // Set up world bounds
+        this.matter.world.setBounds(
+            0,
+            0,
+            this.cameras.main.width,
+            this.cameras.main.height,
+            32, // Thickness
+            true, // left
+            true, // right
+            false, // top
+            true   // bottom
+        );
+
+        // Start spawning words
+        this.spawnNextWord();
+
+        // Set up keyboard input
+        this.input.keyboard?.on('keydown', (event: KeyboardEvent) => this.handleKeyPress(event));
+
+        // Listen for collision events
+        this.matter.world.on('collisionstart', (event: any) => {
+            this.handleCollisions(event);
+        });
+    }
+
+
+    private spawnNextWord() {
+        if (this.isGameOver) return;
+
+        // Create a new word
+        this.currentWord = this.wordManager.createWord();
+        
+        // When the word is cleared, spawn the next one
+        this.matter.world.once('destroy', (event: any) => {
+            if (this.currentWord && this.currentWord.blocks.includes(event.body)) {
+                if (this.currentWord.blocks.every(block => !block || block.isStatic)) {
+                    this.scheduleNextWord();
+                }
+            }
+        });
+    }
+
+    private scheduleNextWord() {
+        // Small delay before spawning the next word
+        this.time.delayedCall(800, () => {
+            if (!this.isGameOver) {
+                this.spawnNextWord();
+            }
+        });
+    }
+
+    private handleKeyPress(event: KeyboardEvent) {
+        if (this.isGameOver || !this.currentWord) return;
+
+        const key = event.key.toLowerCase();
+        
+        // Only process letter keys
+        if (!/^[a-z]$/.test(key)) return;
+
+        const currentBlock = this.currentWord.blocks[0];
+        if (!currentBlock) return;
+
+        const expectedChar = this.currentWord.text[0].toLowerCase();
+        
+        if (key === expectedChar) {
+            // Correct key - remove the block
+            this.handleCorrectKey();
+        } else {
+            // Wrong key - detach the word
+            this.handleWrongKey();
+        }
+    }
+
+
+    private handleCorrectKey() {
+        if (!this.currentWord) return;
+
+        const block = this.currentWord.blocks.shift();
+        if (!block) return;
+
+        // Play burn effect
+        this.effectManager.playBurnEffect(block.position.x, block.position.y);
+        
+        // Remove the block from physics world
+        this.matter.world.remove(block);
+        
+        // Update score using the scene's event system
+        this.events.emit('addScore', 10);
+        
+        // If all blocks are cleared
+        if (this.currentWord.blocks.length === 0) {
+            this.currentWord = null;
+            this.scheduleNextWord();
+        } else {
+            // Update the word text (remove first character)
+            this.currentWord.text = this.currentWord.text.substring(1);
+            
+            // Update the next block's appearance
+            const nextBlock = this.currentWord.blocks[0];
+            if (nextBlock) {
+                const sprite = nextBlock.gameObject as Phaser.Physics.Matter.Sprite;
+                sprite.setTint(0xffff00); // Highlight next block
+            }
+        }
+    }
+
+    private handleWrongKey() {
+        if (!this.currentWord) return;
+        
+        // Convert remaining blocks to static and change their appearance
+        this.currentWord.blocks.forEach(block => {
+            if (block) {
+                this.matter.body.setStatic(block, true);
+                const sprite = block.gameObject as Phaser.Physics.Matter.Sprite;
+                sprite.setTint(0xadd8e6); // Light blue tint for static blocks
+                this.effectManager.playFreezeEffect(block.position.x, block.position.y);
+            }
+        });
+        
+        // Clear the current word
+        this.currentWord = null;
+        
+        // Schedule next word
+        this.scheduleNextWord();
+    }
+
+    private handleCollisions(event: any) {
+        if (this.isGameOver) return;
+        
+        const pairs = event.pairs;
+        
+        for (let i = 0; i < pairs.length; i++) {
+            const bodyA = pairs[i].bodyA;
+            const bodyB = pairs[i].bodyB;
+            
+            // Check if any block hit the bottom
+            if (this.isBottomCollision(bodyA, bodyB) || this.isBottomCollision(bodyB, bodyA)) {
+                if (this.currentWord && this.currentWord.blocks.includes(bodyA)) {
+                    // Word hit the bottom, convert to static
+                    this.handleWrongKey();
+                } else if (this.currentWord && this.currentWord.blocks.includes(bodyB)) {
+                    // Word hit the bottom, convert to static
+                    this.handleWrongKey();
+                }
+            }
+            
+            // Check if any block is too high (game over)
+            if (this.isGameOver) break;
+            
+            const highestBlock = this.physicsManager.findHighestBlock();
+            if (highestBlock && highestBlock.position.y <= 32) {
+                this.gameOver();
+                break;
+            }
+        }
+    }
+
+    private isBottomCollision(bodyA: MatterJS.BodyType, bodyB: MatterJS.BodyType): boolean {
+        return bodyA.label === 'Bounds Bottom' && bodyB.gameObject !== undefined;
+    }
+
+    private gameOver() {
+        if (this.isGameOver) return;
+        
+        this.isGameOver = true;
+        
+        // Stop all physics and timers
+        this.physics.pause();
+        this.time.removeAllEvents();
+        
+        // Notify UI about game over using the scene's event system
+        this.events.emit('gameOver');
+        
+        // Disable input
+        this.input.keyboard?.off('keydown');
+    }
+
+    update() {
+        if (this.isGameOver) return;
+        
+        // Check for game over condition (block too high)
+        const highestBlock = this.physicsManager.findHighestBlock();
+        if (highestBlock && highestBlock.position.y <= 32) {
+            this.gameOver();
+        }
+    }
+}
