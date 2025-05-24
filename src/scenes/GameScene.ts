@@ -1,4 +1,5 @@
 import { Scene } from 'phaser';
+import * as Matter from 'matter-js';
 import { WordManager } from '../systems/WordManager';
 import { PhysicsManager } from '../systems/PhysicsManager';
 import { EffectManager } from '../systems/EffectManager';
@@ -17,6 +18,8 @@ export class GameScene extends Scene {
     }
 
     create(data: { difficulty?: string }) {
+        console.log('GameScene create called');
+        
         // Get reference to UI scene
         this.uiScene = this.scene.get('UIScene') as UIScene;
         
@@ -25,7 +28,7 @@ export class GameScene extends Scene {
         
         // Initialize managers
         this.effectManager = new EffectManager(this);
-        this.physicsManager = new PhysicsManager(this.matter.world, this);
+        this.physicsManager = new PhysicsManager(this);
         this.wordManager = new WordManager(
             this,
             this.physicsManager,
@@ -35,7 +38,12 @@ export class GameScene extends Scene {
         
         console.log('Game started with difficulty:', data.difficulty || 'default');
 
-        // Set up world bounds
+        // Enable Matter.js physics
+        this.matter.world.setGravity(0, 1);
+        
+        // Set up world bounds with collision events
+        // The bounds are created as Matter.js bodies
+        // We don't need to store the return value as the bounds are automatically added to the world
         this.matter.world.setBounds(
             0,
             0,
@@ -47,9 +55,23 @@ export class GameScene extends Scene {
             false, // top
             true   // bottom
         );
+        
+        // Get all bodies and find the bounds
+        const matterWorld = (this.matter as any).world.engine.world;
+        const bodies = Matter.Composite.allBodies(matterWorld);
+        
+        for (const body of bodies) {
+            const bound = body as Matter.Body & { label?: string };
+            if (bound.label?.includes('left')) {
+                bound.label = 'Bounds Left';
+            } else if (bound.label?.includes('right')) {
+                bound.label = 'Bounds Right';
+            } else if (bound.label?.includes('bottom')) {
+                bound.label = 'Bounds Bottom';
+            }
+        }
 
-        // Start spawning words
-        this.spawnNextWord();
+        console.log('Physics world initialized with bounds');
 
         // Set up keyboard input
         this.input.keyboard?.on('keydown', (event: KeyboardEvent) => this.handleKeyPress(event));
@@ -57,6 +79,12 @@ export class GameScene extends Scene {
         // Listen for collision events
         this.matter.world.on('collisionstart', (event: any) => {
             this.handleCollisions(event);
+        });
+        
+        // Start spawning words after a short delay to ensure everything is initialized
+        this.time.delayedCall(500, () => {
+            console.log('Starting to spawn words...');
+            this.spawnNextWord();
         });
     }
 
@@ -201,15 +229,27 @@ export class GameScene extends Scene {
         
         this.isGameOver = true;
         
-        // Stop all physics and timers
-        this.physics.pause();
-        this.time.removeAllEvents();
-        
-        // Notify UI about game over using the scene's event system
-        this.events.emit('gameOver');
-        
-        // Disable input
-        this.input.keyboard?.off('keydown');
+        try {
+            // Pause physics if available
+            if (this.physics && typeof this.physics.pause === 'function') {
+                this.physics.pause();
+            }
+            
+            // Stop all timers
+            if (this.time) {
+                this.time.removeAllEvents();
+            }
+            
+            // Notify UI about game over using the scene's event system
+            this.events.emit('gameOver');
+            
+            // Disable input
+            if (this.input && this.input.keyboard) {
+                this.input.keyboard.off('keydown');
+            }
+        } catch (error) {
+            console.error('Error in gameOver:', error);
+        }
     }
 
     update() {
@@ -217,8 +257,33 @@ export class GameScene extends Scene {
         
         // Check for game over condition (block too high)
         const highestBlock = this.physicsManager.findHighestBlock();
-        if (highestBlock && highestBlock.position.y <= 32) {
-            this.gameOver();
+        
+        // Only check for game over if we have a valid block
+        if (highestBlock && highestBlock.position) {
+            const gameOverY = 100; // Increased from 32 to be more lenient
+            const isBlockTooHigh = highestBlock.position.y <= gameOverY;
+            
+            console.log('Highest block check:', {
+                blockId: highestBlock.id,
+                blockY: highestBlock.position.y,
+                gameOverY,
+                isBlockTooHigh,
+                isStatic: highestBlock.isStatic,
+                hasGameObject: !!highestBlock.gameObject,
+                blockLabel: highestBlock.label
+            });
+            
+            if (isBlockTooHigh) {
+                console.log('GAME OVER - Block reached the top of the screen');
+                this.gameOver();
+                return;
+            }
+        }
+        
+        // If we have no current word, spawn a new one
+        if (!this.currentWord) {
+            console.log('No current word, spawning a new one');
+            this.spawnNextWord();
         }
     }
 }

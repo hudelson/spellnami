@@ -1,11 +1,9 @@
 import { Scene } from 'phaser';
-import { PhysicsManager } from './PhysicsManager';
-import { EffectManager } from './EffectManager';
+import { PhysicsManager, BlockBody } from './PhysicsManager';
 
 export class WordManager {
     private scene: Scene;
     private physicsManager: PhysicsManager;
-    private effectManager: EffectManager;
     private wordList: string[] = [];
     private difficulty: {
         minLength: number;
@@ -16,12 +14,10 @@ export class WordManager {
     constructor(
         scene: Scene,
         physicsManager: PhysicsManager,
-        effectManager: EffectManager,
         difficulty: { minLength: number; maxLength: number; speed: number }
     ) {
         this.scene = scene;
         this.physicsManager = physicsManager;
-        this.effectManager = effectManager;
         this.difficulty = difficulty;
         this.initializeWordList();
     }
@@ -45,26 +41,36 @@ export class WordManager {
     public createWord() {
         // Select a random word from the filtered list
         const word = this.wordList[Math.floor(Math.random() * this.wordList.length)];
+        console.log('Creating word:', word);
         
-        // Calculate starting position (random x, above the top of the screen)
+        // Calculate starting position (random x, just above the top of the screen)
         const startX = 100 + Math.random() * (this.scene.cameras.main.width - 200);
-        const startY = -50;
+        const startY = 100; // Start lower on the screen
         
         // Create blocks for each letter
-        const blocks: MatterJS.BodyType[] = [];
-        let previousBlock: MatterJS.BodyType | null = null;
+        const blocks: BlockBody[] = [];
+        let previousBlock: BlockBody | null = null;
         
         for (let i = 0; i < word.length; i++) {
             const isFirst = i === 0;
             const block = this.physicsManager.createBlock(
                 startX + (i * 45), // Position blocks horizontally
-                startY,
+                startY - (i * 5),   // Slight vertical offset for each block
                 word[i],
                 isFirst
             );
             
-            // Add a small force to make the word fall
-            this.scene.matter.body.setVelocity(block, { x: 0, y: this.difficulty.speed / 60 });
+            // Add a small initial velocity to make the word fall naturally
+            // Use Phaser's Matter Physics API to set velocity
+            const velocity = { 
+                x: (Math.random() - 0.5) * 2, // Slight horizontal movement
+                y: this.difficulty.speed / 30  // Reduced initial speed
+            };
+            // Set velocity directly on the block's body
+            if (block && block.velocity) {
+                block.velocity.x = velocity.x;
+                block.velocity.y = velocity.y;
+            }
             
             // Connect blocks with constraints if not the first block
             if (previousBlock) {
@@ -76,8 +82,11 @@ export class WordManager {
             
             // Highlight the first letter
             if (isFirst) {
-                const sprite = block.gameObject as Phaser.Physics.Matter.Sprite;
-                sprite.setTint(0xffff00); // Yellow tint for the first letter
+                const sprite = block.gameObject;
+                if (sprite && 'setTint' in sprite) {
+                    (sprite as any).setTint(0xffff00); // Yellow tint for the first letter
+                    console.log('First block created at y:', startY);
+                }
             }
         }
         
