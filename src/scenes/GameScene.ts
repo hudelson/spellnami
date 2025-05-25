@@ -91,84 +91,15 @@ export class GameScene extends Scene {
         const leftWall = this.matter.add.rectangle(wallThickness / 2, height / 2, wallThickness, height, { isStatic: true, label: 'Bounds Left' });
         const rightWall = this.matter.add.rectangle(width - wallThickness / 2, height / 2, wallThickness, height, { isStatic: true, label: 'Bounds Right' });
         
-        // Store wall references for debugging
-        const walls = [topWall, rightWall, bottomWall, leftWall];
-        console.log('Created wall bodies:', walls.map(wall => ({
-            id: wall.id,
-            label: wall.label,
-            position: wall.position,
-            isStatic: wall.isStatic
-        })));
+        // Wall boundaries created successfully
         
-        // Enable Matter.js debug rendering with custom colors
-        this.matter.world.drawDebug = true;
-        this.matter.world.debugGraphic.setDepth(100);
-        
-        // Customize debug colors
-        const debugConfig = {
-            showBody: true,
-            showStaticBody: true,
-            showVelocity: true,
-            showCollisions: true,
-            showAxes: true,
-            showPositions: true,
-            showAngleIndicator: true,
-            angleColor: 0xe81153,
-            staticFillStyle: '#ffffff',
-            staticLineThickness: 1,
-            fillColor: 0x106909,
-            fillOpacity: 0.5,
-            lineColor: 0xff00ff,
-            lineThickness: 2,
-            render: {
-                visible: true,
-                opacity: 1,
-                fillStyle: '#ff0000',
-                strokeStyle: '#0000ff',
-                lineWidth: 2
-            }
-        };
-        
-        // Apply debug config
-        Object.assign(this.matter.world.debugConfig, debugConfig);
-        
-        // Force debug rendering to update
-        this.matter.world.debugGraphic.clear();
-        this.matter.world.drawDebug = true;
+        // Disable debug rendering for production
+        this.matter.world.drawDebug = false;
         
         // Get the Matter.js engine instance
         const engine = this.matter.world.engine;
         
-        // Debug: Draw a border around the game area
-        const border = this.add.graphics();
-        border.lineStyle(4, 0x00ff00, 1);
-        border.strokeRect(wallThickness, wallThickness, width - wallThickness * 2, height - wallThickness * 2);
-        border.setDepth(1000);
-        
-        // Add a grid for better visibility
-        const grid = this.add.graphics();
-        grid.lineStyle(1, 0x333333, 0.5);
-        for (let y = 0; y < height; y += 40) {
-            grid.moveTo(0, y);
-            grid.lineTo(width, y);
-        }
-        for (let x = 0; x < width; x += 40) {
-            grid.moveTo(x, 0);
-            grid.lineTo(x, height);
-        }
-        grid.strokePath();
-        
-        // Add a test block to verify rendering
-        const testBlock = this.add.rectangle(width / 2, height / 2, 80, 40, 0xff0000);
-        testBlock.setDepth(1000);
-        
-        // Add test text
-        const testText = this.add.text(width / 2, height / 2 - 50, 'Spellnami', {
-            fontSize: '32px',
-            color: '#ffffff',
-            fontStyle: 'bold'
-        }).setOrigin(0.5);
-        testText.setDepth(1000);
+        // Clean visual setup - no debug elements
         
         // Configure physics timing and engine settings
         engine.timing.timeScale = 1.0;
@@ -177,54 +108,11 @@ export class GameScene extends Scene {
         // Enable continuous updates for physics
         this.matter.world.autoUpdate = true;
         
-        // Debug logging for physics world
-        console.log('Physics world configured with settings:', {
-            autoUpdate: this.matter.world.autoUpdate,
-            gravity: { x: 0, y: 1 },
-            bounds: { width, height },
-            engine: {
-                timing: engine.timing,
-                enableSleeping: engine.enableSleeping
-            }
-        });
+        // Physics world configured successfully
         
-        // Debug: Log when physics world updates
-        this.matter.world.on('beforeupdate', () => {
-            if (this.game.loop.frame % 60 === 0) {
-                const bodies = this.matter.world.getAllBodies();
-                console.log(`Physics update - Bodies: ${bodies.length}`);
-                bodies.forEach((body, index) => {
-                    if (index < 3) { // Only log first few bodies to avoid spam
-                        console.log(`Body ${index}:`, {
-                            id: body.id,
-                            position: body.position,
-                            velocity: body.velocity,
-                            isStatic: body.isStatic,
-                            label: body.label
-                        });
-                    }
-                });
-            }
-        });
+        // Physics world is ready for gameplay
         
-        // Add a debug key to manually trigger physics updates
-        this.input.keyboard?.on('keydown-D', () => {
-            const bodies = this.matter.world.getAllBodies();
-            console.log('=== DEBUG PHYSICS STATE ===');
-            console.log('Total bodies:', bodies.length);
-            bodies.forEach((body, index) => {
-                console.log(`Body ${index} (${body.label || 'no-label'})`, {
-                    id: body.id,
-                    position: body.position,
-                    velocity: body.velocity,
-                    isStatic: body.isStatic
-                });
-            });
-        });
-        
-        // Bounds are now created manually with proper labels above
-        
-        console.log('Physics world initialized with bounds');
+        // Game world setup complete
 
         // Set up keyboard input
         this.input.keyboard?.on('keydown', (event: KeyboardEvent) => this.handleKeyPress(event));
@@ -396,8 +284,6 @@ export class GameScene extends Scene {
                 return;
             }
             
-            console.log(`Collision detected! ${event.pairs.length} pairs`);
-            
             for (const pair of event.pairs) {
                 if (!pair.bodyA || !pair.bodyB) {
                     continue; // Skip if either body is missing
@@ -411,11 +297,6 @@ export class GameScene extends Scene {
                 if (!bodyA || !bodyB) {
                     continue;
                 }
-                
-                console.log('Collision pair:', {
-                    bodyA: { id: bodyA.id, label: bodyA.label, isStatic: bodyA.isStatic, hasGameObject: !!bodyA.gameObject },
-                    bodyB: { id: bodyB.id, label: bodyB.label, isStatic: bodyB.isStatic, hasGameObject: !!bodyB.gameObject }
-                });
                 
                 // Check for bottom collisions
                 const isBodyABottomCollision = this.isBottomCollision(bodyA, bodyB);
@@ -488,18 +369,10 @@ export class GameScene extends Scene {
                               (bodyB.isStatic && Math.abs(bodyB.position.y - bottomY) < 20));
         
         if (isBodyABottom && bodyB.gameObject) {
-            console.log('Bottom collision detected: bodyA is bottom, bodyB is block', {
-                bodyA: { id: bodyA.id, label: bodyA.label, y: bodyA.position.y, isStatic: bodyA.isStatic },
-                bodyB: { id: bodyB.id, label: bodyB.label, y: bodyB.position.y, hasGameObject: !!bodyB.gameObject }
-            });
             return true;
         }
         
         if (isBodyBBottom && bodyA.gameObject) {
-            console.log('Bottom collision detected: bodyB is bottom, bodyA is block', {
-                bodyA: { id: bodyA.id, label: bodyA.label, y: bodyA.position.y, hasGameObject: !!bodyA.gameObject },
-                bodyB: { id: bodyB.id, label: bodyB.label, y: bodyB.position.y, isStatic: bodyB.isStatic }
-            });
             return true;
         }
         
@@ -528,12 +401,7 @@ export class GameScene extends Scene {
             (isBodyBInCurrentWord && isBodyAFrozen && !!bodyA.gameObject)
         );
         
-        if (collision) {
-            console.log('Word-to-word collision detected:', {
-                bodyA: { id: bodyA.id, inCurrentWord: isBodyAInCurrentWord, frozen: isBodyAFrozen },
-                bodyB: { id: bodyB.id, inCurrentWord: isBodyBInCurrentWord, frozen: isBodyBFrozen }
-            });
-        }
+        // Collision logic handled above
         
         return collision;
     }
@@ -558,12 +426,7 @@ export class GameScene extends Scene {
             (isBodyBTopBounds && isBodyAFrozen && !!bodyA.gameObject)
         );
         
-        if (topCollision) {
-            console.log('Top collision detected - frozen letter hit ceiling:', {
-                bodyA: { id: bodyA.id, isTop: isBodyATopBounds, frozen: isBodyAFrozen },
-                bodyB: { id: bodyB.id, isTop: isBodyBTopBounds, frozen: isBodyBFrozen }
-            });
-        }
+        // Top collision logic handled above
         
         return topCollision;
     }
@@ -665,18 +528,7 @@ export class GameScene extends Scene {
                 const isBlockTooHigh = currentY <= gameOverY;
                 const isBlockFrozen = (highestBlock as any).isFrozen === true;
                 
-                // Only log every 60 frames to reduce console spam
-                if (this.game?.loop?.frame % 60 === 0) {
-                    console.log('Highest block check:', {
-                        blockId: highestBlock.id,
-                        blockY: currentY.toFixed(2),
-                        gameOverY,
-                        isBlockTooHigh,
-                        isFrozen: isBlockFrozen,
-                        hasGameObject: !!highestBlock.gameObject,
-                        blockLabel: highestBlock.label || 'no-label'
-                    });
-                }
+                // Monitor game over conditions silently
                 
                 // Game over if frozen blocks reach too high (near spawn area)
                 if (isBlockTooHigh && isBlockFrozen) {
