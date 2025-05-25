@@ -92,7 +92,7 @@ export class WordManager {
         const screenWidth = this.scene.cameras.main.width;
         const wordWidth = word.length * 40; // Each block is 40 pixels wide
         const sideMarginWidth = 120; // New wider side margins
-        const topMarginHeight = 100; // New top margin height
+        const topMarginHeight = 80; // Updated smaller top margin for more play space
         
         // Calculate safe horizontal range (ensure word fits completely in play area)
         const minX = sideMarginWidth + 20; // Left margin + half block width
@@ -126,10 +126,10 @@ export class WordManager {
             // Debug log the block before setting velocity
             console.log('Block before velocity:', block);
             
-            // Set initial velocity to make the word fall naturally
+            // Set initial velocity to make the word fall naturally (slower for easier gameplay)
             const velocity = { 
-                x: (Math.random() - 0.5) * 0.5, // Very slight horizontal movement
-                y: this.difficulty.speed / 50  // Much slower initial falling speed
+                x: (Math.random() - 0.5) * 0.3, // Even less horizontal movement
+                y: this.difficulty.speed / 80  // Much slower initial falling speed for easier gameplay
             };
             
             try {

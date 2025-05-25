@@ -18,9 +18,48 @@ export class UIScene extends Scene {
         master: { name: 'Master', minLength: 7, maxLength: 10, speed: 220, color: '#F44336' }
     };
     private currentDifficulty!: string;
+    private topScores: number[] = [];
 
     constructor() {
         super('UIScene');
+        this.loadTopScores();
+    }
+
+    private loadTopScores() {
+        try {
+            const savedScores = localStorage.getItem('spellnami-top-scores');
+            if (savedScores) {
+                this.topScores = JSON.parse(savedScores);
+            } else {
+                this.topScores = [0, 0, 0]; // Default top scores
+            }
+        } catch (error) {
+            console.warn('Failed to load top scores:', error);
+            this.topScores = [0, 0, 0];
+        }
+    }
+
+    private saveTopScores() {
+        try {
+            localStorage.setItem('spellnami-top-scores', JSON.stringify(this.topScores));
+        } catch (error) {
+            console.warn('Failed to save top scores:', error);
+        }
+    }
+
+    private updateTopScores(newScore: number) {
+        // Add the new score to the list
+        this.topScores.push(newScore);
+        
+        // Sort in descending order and keep only top 3
+        this.topScores.sort((a, b) => b - a);
+        this.topScores = this.topScores.slice(0, 3);
+        
+        // Save to localStorage
+        this.saveTopScores();
+        
+        // Return true if this is a new high score (top 3)
+        return this.topScores.includes(newScore);
     }
 
     private addScore(points: number) {
@@ -29,6 +68,9 @@ export class UIScene extends Scene {
     }
 
     private showGameOver() {
+        // Update top scores with current score
+        const isNewHighScore = this.updateTopScores(this.score);
+        
         // Show game over panel if it doesn't exist
         if (!this.gameOverPanel) {
             this.createGameOverPanel();
@@ -50,6 +92,25 @@ export class UIScene extends Scene {
             if (scoreText) {
                 scoreText.setText(`Final Score: ${this.score}`);
             }
+            
+            // Update top scores display
+            const medals = ['🥇', '🥈', '🥉'];
+            const colors = ['#FFD700', '#C0C0C0', '#CD7F32'];
+            
+            // Find and update the top score elements (they should be after the title)
+            const topScoreElements = this.gameOverPanel.list.filter(child => 
+                child instanceof Phaser.GameObjects.Text && 
+                (child as Phaser.GameObjects.Text).text.match(/[🥇🥈🥉]/)
+            ) as Phaser.GameObjects.Text[];
+            
+            for (let i = 0; i < Math.min(3, topScoreElements.length); i++) {
+                const score = this.topScores[i] || 0;
+                const medal = medals[i];
+                const color = colors[i];
+                
+                topScoreElements[i].setText(`${medal} ${score}`);
+                topScoreElements[i].setColor(color);
+            }
         }
     }
 
@@ -70,40 +131,66 @@ export class UIScene extends Scene {
     }
 
     private createGameOverPanel() {
-        const width = 400;
-        const height = 250;
+        const width = 500;
+        const height = 400;
         const x = this.cameras.main.width / 2;
         const y = this.cameras.main.height / 2;
 
         // Create panel background
         const panel = this.add.graphics()
-            .fillStyle(0x000000, 0.8)
+            .fillStyle(0x000000, 0.9)
             .fillRoundedRect(-width / 2, -height / 2, width, height, 10)
             .lineStyle(2, 0xffffff, 1)
             .strokeRoundedRect(-width / 2, -height / 2, width, height, 10);
 
         // Add game over text
-        const gameOverText = this.add.text(0, -60, 'GAME OVER', {
+        const gameOverText = this.add.text(0, -160, 'GAME OVER', {
             fontSize: '36px',
             color: '#ff3333',
             fontStyle: 'bold'
         }).setOrigin(0.5);
 
         // Add score text
-        const finalScoreText = this.add.text(0, -10, `Final Score: ${this.score}`, {
+        const finalScoreText = this.add.text(0, -110, `Final Score: ${this.score}`, {
             fontSize: '24px',
             color: '#fff'
         }).setOrigin(0.5);
 
+        // Add top scores section
+        const topScoresTitle = this.add.text(0, -70, 'TOP SCORES', {
+            fontSize: '20px',
+            color: '#00ffff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+
+        // Create top scores list
+        const topScoreElements: Phaser.GameObjects.Text[] = [];
+        const medals = ['🥇', '🥈', '🥉'];
+        const colors = ['#FFD700', '#C0C0C0', '#CD7F32']; // Gold, Silver, Bronze
+        
+        for (let i = 0; i < 3; i++) {
+            const score = this.topScores[i] || 0;
+            const medal = medals[i];
+            const color = colors[i];
+            
+            const scoreText = this.add.text(0, -40 + (i * 25), `${medal} ${score}`, {
+                fontSize: '18px',
+                color: color,
+                fontStyle: 'bold'
+            }).setOrigin(0.5);
+            
+            topScoreElements.push(scoreText);
+        }
+
         // Add restart button
-        const restartButton = this.add.rectangle(0, 60, 150, 50, 0x4CAF50)
+        const restartButton = this.add.rectangle(0, 120, 150, 50, 0x4CAF50)
             .setInteractive()
             .on('pointerdown', () => {
                 // Properly reset and restart the game
                 this.restartGame();
             });
 
-        const buttonText = this.add.text(0, 60, 'Play Again', {
+        const buttonText = this.add.text(0, 120, 'Play Again', {
             fontSize: '20px',
             color: '#fff',
             fontStyle: 'bold'
@@ -123,6 +210,8 @@ export class UIScene extends Scene {
             panel,
             gameOverText,
             finalScoreText,
+            topScoresTitle,
+            ...topScoreElements,
             restartButton,
             buttonText
         ]).setDepth(1000).setVisible(false);

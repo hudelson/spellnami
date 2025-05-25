@@ -77,8 +77,8 @@ export class GameScene extends Scene {
             }
         });
         
-        // Configure physics world with slower gravity settings
-        this.matter.world.setGravity(0, 0.3);
+        // Configure physics world with even slower gravity settings for easier gameplay
+        this.matter.world.setGravity(0, 0.2);
         
         // Set up camera
         this.cameras.main.setBackgroundColor('#1a1a2e');
@@ -88,8 +88,8 @@ export class GameScene extends Scene {
         // Create bounds manually to ensure proper collision detection
         // Make the play area narrower with wider margins
         const sideMarginWidth = 120; // Much wider side margins for texture
-        const topMarginHeight = 100; // More space at top for header
-        const bottomWallThickness = 32;
+        const topMarginHeight = 80; // Reduced top margin for more vertical play space
+        const bottomWallThickness = 20; // Thinner bottom wall for more play space
         
         // Calculate play area dimensions
         const playAreaWidth = width - (sideMarginWidth * 2);
@@ -413,7 +413,7 @@ export class GameScene extends Scene {
 
     private isBottomCollision(bodyA: BlockBody, bodyB: BlockBody): boolean {
         const { height } = this.cameras.main;
-        const bottomWallThickness = 32;
+        const bottomWallThickness = 20; // Updated to match new layout
         const bottomY = height - bottomWallThickness / 2; // Bottom boundary center position
         
         // Check if bodyA is the bottom bounds (by label or position) and bodyB is a block
@@ -461,7 +461,7 @@ export class GameScene extends Scene {
     }
 
     private isTopCollision(bodyA: BlockBody, bodyB: BlockBody): boolean {
-        const topMarginHeight = 100;
+        const topMarginHeight = 80; // Updated to match new layout
         const topY = topMarginHeight - 16; // Top boundary center position
         
         // Check if a frozen/dead letter hits the top boundary (by label or position)
@@ -528,39 +528,67 @@ export class GameScene extends Scene {
         const allBodies = this.matter.world.getAllBodies();
         let explosionDelay = 0;
         
+        // Create a list of blocks to explode with their positions captured now
+        const blocksToExplode: Array<{
+            body: Matter.Body;
+            container: Phaser.GameObjects.Container;
+            x: number;
+            y: number;
+        }> = [];
+        
         allBodies.forEach((body) => {
             // Only explode blocks that have game objects (letter blocks)
-            if (body.gameObject && !body.isStatic) {
+            if (body.gameObject && !body.isStatic && body.position) {
                 const container = body.gameObject as Phaser.GameObjects.Container;
-                
-                // Play explosion effect at block position with staggered timing
-                this.effectManager.playExplosionEffect(body.position.x, body.position.y, explosionDelay);
-                
-                // Animate the block disappearing
-                if (container) {
-                    this.time.delayedCall(explosionDelay, () => {
-                        this.tweens.add({
-                            targets: container,
-                            alpha: 0,
-                            scaleX: 2,
-                            scaleY: 2,
-                            rotation: (Math.random() - 0.5) * Math.PI,
-                            duration: 800,
-                            ease: 'Power2',
-                            onComplete: () => {
-                                // Destroy the block after animation
-                                this.physicsManager.destroyBody(body as Matter.Body);
-                            }
-                        });
+                if (container && container.active) {
+                    blocksToExplode.push({
+                        body: body as Matter.Body,
+                        container: container,
+                        x: body.position.x,
+                        y: body.position.y
                     });
                 }
-                
-                // Stagger the explosions for dramatic effect
-                explosionDelay += 100 + Math.random() * 200;
             }
         });
         
-        console.log(`Exploding ${allBodies.filter(b => b.gameObject && !b.isStatic).length} blocks`);
+        // Now animate each block with proper safety checks
+        blocksToExplode.forEach((blockData) => {
+            // Play explosion effect at block position with staggered timing
+            this.effectManager.playExplosionEffect(blockData.x, blockData.y, explosionDelay);
+            
+            // Animate the block disappearing
+            this.time.delayedCall(explosionDelay, () => {
+                // Check if container is still valid before animating
+                if (blockData.container && blockData.container.active && blockData.container.scene) {
+                    this.tweens.add({
+                        targets: blockData.container,
+                        alpha: 0,
+                        scaleX: 2,
+                        scaleY: 2,
+                        rotation: (Math.random() - 0.5) * Math.PI,
+                        duration: 800,
+                        ease: 'Power2',
+                        onComplete: () => {
+                            // Destroy the block after animation, with safety check
+                            if (blockData.body && this.physicsManager) {
+                                this.physicsManager.destroyBody(blockData.body);
+                            }
+                        },
+                        onCompleteScope: this
+                    });
+                } else {
+                    // If container is already destroyed, just clean up the physics body
+                    if (blockData.body && this.physicsManager) {
+                        this.physicsManager.destroyBody(blockData.body);
+                    }
+                }
+            });
+            
+            // Stagger the explosions for dramatic effect
+            explosionDelay += 100 + Math.random() * 200;
+        });
+        
+        console.log(`Exploding ${blocksToExplode.length} blocks`);
     }
 
     private createVisualEnhancements(width: number, height: number, sideMarginWidth: number, topMarginHeight: number, bottomWallThickness: number) {
@@ -687,7 +715,7 @@ export class GameScene extends Scene {
             
             // Only check for game over if we have a valid block with a position
             if (highestBlock?.position?.y !== undefined) {
-                const topMarginHeight = 100;
+                const topMarginHeight = 80; // Updated to match new layout
                 const gameOverY = topMarginHeight + 20; // Y-coordinate threshold for game over (slightly below spawn area)
                 const currentY = highestBlock.position.y;
                 const isBlockTooHigh = currentY <= gameOverY;

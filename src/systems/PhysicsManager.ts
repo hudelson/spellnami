@@ -269,20 +269,30 @@ export class PhysicsManager {
      */
     public removeConstraintsForBody(body: Matter.Body) {
         try {
+            if (!body) {
+                return;
+            }
+            
             // Find constraints that involve this body
             const constraintsToRemove = this.constraints.filter(constraint => {
-                return constraint.bodyA === body || constraint.bodyB === body;
+                return constraint && (constraint.bodyA === body || constraint.bodyB === body);
             });
             
             // Remove each constraint
             constraintsToRemove.forEach(constraint => {
-                this.scene.matter.world.remove(constraint);
-                console.log('Removed constraint:', constraint.id);
+                try {
+                    if (constraint && this.scene.matter.world) {
+                        this.scene.matter.world.remove(constraint);
+                        console.log('Removed constraint:', constraint.id);
+                    }
+                } catch (constraintError) {
+                    console.warn('Error removing individual constraint:', constraintError);
+                }
             });
             
             // Remove from our tracking array
             this.constraints = this.constraints.filter(constraint => {
-                return constraint.bodyA !== body && constraint.bodyB !== body;
+                return constraint && constraint.bodyA !== body && constraint.bodyB !== body;
             });
             
         } catch (error) {
@@ -301,6 +311,12 @@ export class PhysicsManager {
                 return;
             }
             
+            // Check if body is already removed from the world
+            if (!this.scene.matter.world.has(body)) {
+                console.log('Body already removed from physics world, skipping destruction');
+                return;
+            }
+            
             // Remove all constraints connected to this body first
             this.removeConstraintsForBody(body);
             
@@ -309,12 +325,25 @@ export class PhysicsManager {
             
             // Clean up the game object if it exists
             const blockBody = body as BlockBody;
-            if (blockBody.gameObject && blockBody.gameObject.destroy) {
-                blockBody.gameObject.destroy();
+            if (blockBody.gameObject) {
+                try {
+                    // Check if the game object is still valid before destroying
+                    if (blockBody.gameObject.active && blockBody.gameObject.scene && blockBody.gameObject.destroy) {
+                        blockBody.gameObject.destroy();
+                    }
+                } catch (gameObjectError) {
+                    console.warn('Error destroying game object:', gameObjectError);
+                }
             }
             
-            // Remove from physics world
-            this.scene.matter.world.remove(body as MatterJS.BodyType, true);
+            // Remove from physics world with additional safety check
+            try {
+                if (this.scene.matter.world.has(body)) {
+                    this.scene.matter.world.remove(body as MatterJS.BodyType, true);
+                }
+            } catch (physicsError) {
+                console.warn('Error removing body from physics world:', physicsError);
+            }
             
         } catch (error) {
             console.error('Error destroying body:', error);
