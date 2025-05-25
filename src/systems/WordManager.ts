@@ -10,6 +10,7 @@ export class WordManager {
         maxLength: number;
         speed: number;
     };
+    private nextWord: string | null = null; // Store the next word to be spawned
 
     constructor(
         scene: Scene,
@@ -20,6 +21,8 @@ export class WordManager {
         this.physicsManager = physicsManager;
         this.difficulty = difficulty;
         this.initializeWordList();
+        // Pre-select the first next word
+        this.nextWord = this.selectRandomWord();
     }
 
     private initializeWordList() {
@@ -72,23 +75,32 @@ export class WordManager {
         }
     }
 
+    private selectRandomWord(): string {
+        return this.wordList[Math.floor(Math.random() * this.wordList.length)];
+    }
+
     public createWord() {
-        // Select a random word from the filtered list
-        const word = this.wordList[Math.floor(Math.random() * this.wordList.length)];
-        console.log('Creating word:', word);
+        // Use the pre-selected next word
+        const word = this.nextWord || this.selectRandomWord();
+        
+        // Immediately select the next word for the next spawn
+        this.nextWord = this.selectRandomWord();
+        
+        console.log('Creating word:', word, '| Next word will be:', this.nextWord);
         
         // Calculate starting position (random horizontal, at the top of the screen)
         const screenWidth = this.scene.cameras.main.width;
         const wordWidth = word.length * 40; // Each block is 40 pixels wide
-        const wallThickness = 32; // Account for the wall thickness
+        const sideMarginWidth = 120; // New wider side margins
+        const topMarginHeight = 100; // New top margin height
         
         // Calculate safe horizontal range (ensure word fits completely in play area)
-        const minX = wallThickness + 20; // Left wall + half block width
-        const maxX = screenWidth - wallThickness - wordWidth + 20; // Right wall - word width + half block width
+        const minX = sideMarginWidth + 20; // Left margin + half block width
+        const maxX = screenWidth - sideMarginWidth - wordWidth + 20; // Right margin - word width + half block width
         
         // Generate random X position within safe range
         const startX = Math.random() * (maxX - minX) + minX;
-        const startY = 50; // Start at the top of the visible area
+        const startY = topMarginHeight + 20; // Start below the header area
         
         console.log(`Word "${word}" spawning at x: ${startX.toFixed(1)} (safe range: ${minX.toFixed(1)} - ${maxX.toFixed(1)})`);
         
@@ -166,6 +178,10 @@ export class WordManager {
             text: word,
             blocks: blocks
         };
+    }
+
+    public getNextWord(): string | null {
+        return this.nextWord;
     }
 
     public cleanup() {

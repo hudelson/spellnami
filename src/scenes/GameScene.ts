@@ -31,6 +31,9 @@ export class GameScene extends Scene {
     private isGameOver: boolean = false;
     // Define the current word with our block type
     private currentWord: { text: string; blocks: BlockBody[] } | null = null;
+    // Header UI elements
+    private headerScoreText!: Phaser.GameObjects.Text;
+    private headerNextWordText!: Phaser.GameObjects.Text;
 
     constructor() {
         super('GameScene');
@@ -83,13 +86,46 @@ export class GameScene extends Scene {
         this.cameras.main.centerOn(width / 2, height / 2);
         
         // Create bounds manually to ensure proper collision detection
-        const wallThickness = 32;
+        // Make the play area narrower with wider margins
+        const sideMarginWidth = 120; // Much wider side margins for texture
+        const topMarginHeight = 100; // More space at top for header
+        const bottomWallThickness = 32;
         
-        // Create individual wall bodies manually
-        const topWall = this.matter.add.rectangle(width / 2, wallThickness / 2, width, wallThickness, { isStatic: true, label: 'Bounds Top' });
-        const bottomWall = this.matter.add.rectangle(width / 2, height - wallThickness / 2, width, wallThickness, { isStatic: true, label: 'Bounds Bottom' });
-        const leftWall = this.matter.add.rectangle(wallThickness / 2, height / 2, wallThickness, height, { isStatic: true, label: 'Bounds Left' });
-        const rightWall = this.matter.add.rectangle(width - wallThickness / 2, height / 2, wallThickness, height, { isStatic: true, label: 'Bounds Right' });
+        // Calculate play area dimensions
+        const playAreaWidth = width - (sideMarginWidth * 2);
+        const playAreaHeight = height - topMarginHeight - bottomWallThickness;
+        const playAreaLeft = sideMarginWidth;
+        const playAreaTop = topMarginHeight;
+        
+        // Create individual wall bodies manually for the narrower play area
+        const topWall = this.matter.add.rectangle(
+            width / 2, 
+            playAreaTop - 16, 
+            playAreaWidth, 
+            32, 
+            { isStatic: true, label: 'Bounds Top' }
+        );
+        const bottomWall = this.matter.add.rectangle(
+            width / 2, 
+            height - bottomWallThickness / 2, 
+            playAreaWidth, 
+            bottomWallThickness, 
+            { isStatic: true, label: 'Bounds Bottom' }
+        );
+        const leftWall = this.matter.add.rectangle(
+            playAreaLeft - 16, 
+            height / 2, 
+            32, 
+            height, 
+            { isStatic: true, label: 'Bounds Left' }
+        );
+        const rightWall = this.matter.add.rectangle(
+            playAreaLeft + playAreaWidth + 16, 
+            height / 2, 
+            32, 
+            height, 
+            { isStatic: true, label: 'Bounds Right' }
+        );
         
         // Wall boundaries created successfully
         
@@ -99,7 +135,8 @@ export class GameScene extends Scene {
         // Get the Matter.js engine instance
         const engine = this.matter.world.engine;
         
-        // Clean visual setup - no debug elements
+        // Create visual enhancements with new layout parameters
+        this.createVisualEnhancements(width, height, sideMarginWidth, topMarginHeight, bottomWallThickness);
         
         // Configure physics timing and engine settings
         engine.timing.timeScale = 1.0;
@@ -122,6 +159,13 @@ export class GameScene extends Scene {
             this.handleCollisions(event);
         });
         
+        // Listen for score updates to update header
+        this.events.on('addScore', (points: number) => {
+            if (this.headerScoreText && this.uiScene) {
+                this.headerScoreText.setText(this.uiScene.getScore().toString());
+            }
+        });
+        
         // Start spawning words after a short delay to ensure everything is initialized
         this.time.delayedCall(500, () => {
             console.log('Starting to spawn words...');
@@ -136,6 +180,16 @@ export class GameScene extends Scene {
         console.log('Spawning new word...');
         // Create a new word
         this.currentWord = this.wordManager.createWord();
+        
+        // Update next word display
+        this.updateNextWordDisplay();
+    }
+
+    private updateNextWordDisplay() {
+        if (this.headerNextWordText && this.wordManager) {
+            const nextWord = this.wordManager.getNextWord();
+            this.headerNextWordText.setText(nextWord ? nextWord.toUpperCase() : '');
+        }
     }
 
     private scheduleNextWord() {
@@ -359,8 +413,8 @@ export class GameScene extends Scene {
 
     private isBottomCollision(bodyA: BlockBody, bodyB: BlockBody): boolean {
         const { height } = this.cameras.main;
-        const wallThickness = 32;
-        const bottomY = height - wallThickness / 2; // Bottom boundary center position
+        const bottomWallThickness = 32;
+        const bottomY = height - bottomWallThickness / 2; // Bottom boundary center position
         
         // Check if bodyA is the bottom bounds (by label or position) and bodyB is a block
         const isBodyABottom = (bodyA.label === 'Bounds Bottom' || 
@@ -407,8 +461,8 @@ export class GameScene extends Scene {
     }
 
     private isTopCollision(bodyA: BlockBody, bodyB: BlockBody): boolean {
-        const wallThickness = 32;
-        const topY = wallThickness / 2; // Top boundary center position
+        const topMarginHeight = 100;
+        const topY = topMarginHeight - 16; // Top boundary center position
         
         // Check if a frozen/dead letter hits the top boundary (by label or position)
         const isBodyATopBounds = (bodyA.label === 'Bounds Top' || 
@@ -509,6 +563,116 @@ export class GameScene extends Scene {
         console.log(`Exploding ${allBodies.filter(b => b.gameObject && !b.isStatic).length} blocks`);
     }
 
+    private createVisualEnhancements(width: number, height: number, sideMarginWidth: number, topMarginHeight: number, bottomWallThickness: number) {
+        // Create play area border
+        this.createPlayAreaBorder(width, height, sideMarginWidth, topMarginHeight, bottomWallThickness);
+        
+        // Create pixel pattern in margins
+        this.createMarginPatterns(width, height, sideMarginWidth, topMarginHeight, bottomWallThickness);
+        
+        // Create header with score and next word
+        this.createGameHeader(width, sideMarginWidth, topMarginHeight, bottomWallThickness);
+    }
+
+    private createPlayAreaBorder(width: number, height: number, sideMarginWidth: number, topMarginHeight: number, bottomWallThickness: number) {
+        const borderGraphics = this.add.graphics();
+        
+        // Main play area border (inner border)
+        borderGraphics.lineStyle(3, 0x00ffff, 0.8);
+        borderGraphics.strokeRect(
+            sideMarginWidth - 2, 
+            topMarginHeight - 2, 
+            width - (sideMarginWidth * 2) + 4, 
+            height - (topMarginHeight + bottomWallThickness) + 4
+        );
+        
+        // Outer decorative border
+        borderGraphics.lineStyle(2, 0x0088ff, 0.6);
+        borderGraphics.strokeRect(
+            sideMarginWidth - 6, 
+            topMarginHeight - 6, 
+            width - (sideMarginWidth * 2) + 12, 
+            height - (topMarginHeight + bottomWallThickness) + 12
+        );
+        
+        borderGraphics.setDepth(10);
+    }
+
+    private createMarginPatterns(width: number, height: number, sideMarginWidth: number, topMarginHeight: number, bottomWallThickness: number) {
+        const patternGraphics = this.add.graphics();
+        
+        // Left margin pattern
+        this.createPixelPattern(patternGraphics, 0, 0, sideMarginWidth, height);
+        
+        // Right margin pattern
+        this.createPixelPattern(patternGraphics, width - sideMarginWidth, 0, sideMarginWidth, height);
+        
+        // Top margin pattern (excluding corners)
+        this.createPixelPattern(patternGraphics, sideMarginWidth, 0, width - (sideMarginWidth * 2), topMarginHeight);
+        
+        // Bottom margin pattern (excluding corners)
+        this.createPixelPattern(patternGraphics, sideMarginWidth, height - bottomWallThickness, width - (sideMarginWidth * 2), bottomWallThickness);
+        
+        patternGraphics.setDepth(5);
+    }
+
+    private createPixelPattern(graphics: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number) {
+        const pixelSize = 4;
+        const colors = [0x1a1a2e, 0x16213e, 0x0f3460, 0x533483];
+        
+        for (let px = x; px < x + w; px += pixelSize) {
+            for (let py = y; py < y + h; py += pixelSize) {
+                // Create a pseudo-random pattern based on position
+                const seed = (px * 7 + py * 13) % 100;
+                if (seed < 70) { // 70% chance of drawing a pixel
+                    const colorIndex = Math.floor(seed / 17.5) % colors.length;
+                    graphics.fillStyle(colors[colorIndex], 0.6);
+                    graphics.fillRect(px, py, pixelSize, pixelSize);
+                }
+            }
+        }
+    }
+
+    private createGameHeader(width: number, sideMarginWidth: number, topMarginHeight: number, bottomWallThickness: number) {
+        const headerHeight = 60;
+        const headerY = topMarginHeight - headerHeight - 10;
+        
+        // Header background
+        const headerBg = this.add.graphics();
+        headerBg.fillStyle(0x000000, 0.8);
+        headerBg.fillRoundedRect(sideMarginWidth, headerY, width - (sideMarginWidth * 2), headerHeight, 8);
+        headerBg.lineStyle(2, 0x00ffff, 0.6);
+        headerBg.strokeRoundedRect(sideMarginWidth, headerY, width - (sideMarginWidth * 2), headerHeight, 8);
+        headerBg.setDepth(15);
+        
+        // Score section (left side)
+        this.add.text(sideMarginWidth + 20, headerY + 10, 'SCORE', {
+            fontSize: '14px',
+            color: '#00ffff',
+            fontStyle: 'bold'
+        }).setDepth(20);
+        
+        // Next word section (right side)
+        this.add.text(width - sideMarginWidth - 120, headerY + 10, 'NEXT WORD', {
+            fontSize: '14px',
+            color: '#00ffff',
+            fontStyle: 'bold'
+        }).setDepth(20);
+        
+        // Store references for updating
+        this.headerScoreText = this.add.text(sideMarginWidth + 20, headerY + 30, '0', {
+            fontSize: '18px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setDepth(20);
+        
+        this.headerNextWordText = this.add.text(width - sideMarginWidth - 120, headerY + 30, '', {
+            fontSize: '16px',
+            color: '#ffff00',
+            fontStyle: 'bold'
+        }).setDepth(20);
+    }
+
     /**
      * Called every frame, used for game logic updates
      */
@@ -523,7 +687,8 @@ export class GameScene extends Scene {
             
             // Only check for game over if we have a valid block with a position
             if (highestBlock?.position?.y !== undefined) {
-                const gameOverY = 80; // Y-coordinate threshold for game over (slightly below spawn area)
+                const topMarginHeight = 100;
+                const gameOverY = topMarginHeight + 20; // Y-coordinate threshold for game over (slightly below spawn area)
                 const currentY = highestBlock.position.y;
                 const isBlockTooHigh = currentY <= gameOverY;
                 const isBlockFrozen = (highestBlock as any).isFrozen === true;

@@ -156,14 +156,14 @@ export class UIScene extends Scene {
             this.showGameOver();
         });
 
-        // Create score text
+        // Create score text (hidden since we show it in game header)
         this.scoreText = this.add.text(20, 20, 'Score: 0', {
             fontSize: '24px',
             color: '#fff',
             fontStyle: 'bold',
             stroke: '#000',
             strokeThickness: 2
-        });
+        }).setVisible(false);
 
         // Create game over panel (initially hidden)
         this.createGameOverPanel();
