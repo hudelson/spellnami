@@ -23,19 +23,40 @@ export class WordManager {
     }
 
     private initializeWordList() {
-        // Basic word list - in a real game, this would be loaded from a JSON file
-        this.wordList = [
-            'code', 'game', 'type', 'fast', 'slow', 'word', 'play', 'jump', 'fall', 'moon',
-            'star', 'bird', 'fish', 'frog', 'duck', 'lion', 'bear', 'wolf', 'deer', 'goat',
-            'frog', 'swan', 'seal', 'mole', 'mice', 'rat', 'bat', 'cat', 'dog', 'cow',
-            'pig', 'fox', 'ant', 'bee', 'fly', 'wasp', 'bug', 'owl', 'eel', 'emu',
-            'ape', 'ass', 'elk', 'hen', 'ram', 'yak', 'koi', 'kite', 'lamb', 'lynx'
+        // Extended word list with words of various lengths
+        const allWords = [
+            // 3-4 letters
+            'cat', 'dog', 'sun', 'hat', 'pen', 'cup', 'key', 'jam', 'ant', 'bee',
+            'car', 'bus', 'egg', 'ink', 'jar', 'keg', 'leg', 'man', 'net', 'owl',
+            'pig', 'rat', 'sun', 'toy', 'van', 'web', 'yak', 'zip', 'arm', 'bed',
+            
+            // 5 letters
+            'apple', 'beach', 'candy', 'dance', 'eagle', 'fairy', 'grape', 'house', 'igloo', 'jelly',
+            'koala', 'lemon', 'mango', 'night', 'olive', 'panda', 'queen', 'river', 'sunny', 'tiger',
+            'umbra', 'vivid', 'water', 'xerox', 'yacht', 'zebra', 'angel', 'bread', 'cloud', 'daisy',
+            
+            // 6-7 letters
+            'banana', 'camera', 'dragon', 'eleven', 'flower', 'guitar', 'harbor', 'island', 'jacket', 'kitten',
+            'laptop', 'monkey', 'napkin', 'orange', 'pencil', 'quarry', 'rabbit', 'sailor', 'turtle', 'umbrella',
+            'vacuum', 'window', 'yellow', 'zephyr', 'basket', 'candle', 'dollar', 'echoes', 'forest', 'garden',
+            
+            // 8-10 letters
+            'elephant', 'football', 'giraffee', 'hospital', 'jellyfish', 'kangaroo', 'lighthouse', 'mushroom', 'notebook', 'octopus',
+            'pineapple', 'question', 'rainbow', 'sunshine', 'tomorrow', 'umbrella', 'volcano', 'waterfall', 'xylophone', 'yesterday',
+            'zucchini', 'adventure', 'butterfly', 'chocolate', 'dinosaur', 'eleven', 'friendly', 'grandma', 'homework', 'jump', 'kite'
         ];
 
         // Filter words based on difficulty
-        this.wordList = this.wordList.filter(
-            word => word.length >= this.difficulty.minLength && word.length <= this.difficulty.maxLength
+        this.wordList = allWords.filter(
+            word => word.length >= this.difficulty.minLength && 
+                   word.length <= this.difficulty.maxLength
         );
+        
+        // If no words match the difficulty, use a default set
+        if (this.wordList.length === 0) {
+            console.warn('No words matched the difficulty settings. Using default word list.');
+            this.wordList = ['code', 'game', 'type', 'fast', 'slow', 'word', 'play', 'jump', 'fall', 'moon'];
+        }
     }
 
     public createWord() {

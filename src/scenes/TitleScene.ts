@@ -109,23 +109,25 @@ export class TitleScene extends Scene {
             ease: 'Sine.easeInOut'
         });
 
-        // Add subtitle
+        // Add subtitle with more space from the title
         this.add.text(
             this.cameras.main.width / 2,
-            title.y + 70,
+            title.y + 90,  // Increased from 70 to 90 for more space
             'Select Difficulty',
             {
                 fontSize: '24px',
                 color: '#fff',
-                fontStyle: 'bold'
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 2
             }
         ).setOrigin(0.5);
 
         // Difficulty levels with different colors and positions
         const difficulties = [
-            { text: 'Apprentice', key: 'apprentice', color: 0x4CAF50, y: 0 },
-            { text: 'Scholar', key: 'scholar', color: 0xFF9800, y: 70 },
-            { text: 'Master', key: 'master', color: 0xF44336, y: 140 }
+            { text: 'Apprentice', key: 'apprentice', color: 0x4CAF50, hoverColor: 0x45a049, y: 0 },
+            { text: 'Scholar', key: 'scholar', color: 0xFF9800, hoverColor: 0xe68a00, y: 80 },  // Increased from 70 to 80
+            { text: 'Master', key: 'master', color: 0xF44336, hoverColor: 0xda190b, y: 160 }   // Increased from 140 to 160
         ];
 
         // Create buttons
@@ -147,8 +149,13 @@ export class TitleScene extends Scene {
                 onClick: () => this.startGame(difficulty.key as 'apprentice' | 'scholar' | 'master')
             }).setColor(difficulty.color);
             
-            // Add hover effect
+            // Store the original color
+            const originalColor = difficulty.color;
+            const hoverColor = difficulty.hoverColor;
+            
+            // Add hover effect with custom colors
             button.on('pointerover', () => {
+                button.setColor(hoverColor);
                 this.tweens.add({
                     targets: button,
                     scaleX: 1.1,
@@ -158,6 +165,7 @@ export class TitleScene extends Scene {
             });
             
             button.on('pointerout', () => {
+                button.setColor(originalColor);
                 this.tweens.add({
                     targets: button,
                     scaleX: 1,
