@@ -138,29 +138,8 @@ export class PhysicsManager {
             container.add([blockGraphic, letterText]);
             container.setDepth(1000);
             
-            // Debug: Add a small red dot at the container's origin
-            const debugDot = this.scene.add.circle(0, 0, 3, 0xff0000);
-            container.add(debugDot);
-            
-            // Make container interactive for debugging
-            container.setInteractive(new Phaser.Geom.Rectangle(-20, -20, 40, 40), Phaser.Geom.Rectangle.Contains);
-            container.on('pointerover', () => {
-                blockGraphic.clear();
-                blockGraphic.fillStyle(0x00ff00, 0.5);
-                blockGraphic.fillRect(-20, -20, 40, 40);
-                console.log('Block hovered:', { x: container.x, y: container.y, letter });
-            });
-            
-            container.on('pointerout', () => {
-                blockGraphic.clear();
-                blockGraphic.fillStyle(0x3498db, 1);
-                blockGraphic.fillRect(-20, -20, 40, 40);
-                blockGraphic.lineStyle(2, 0x2980b9, 1);
-                blockGraphic.strokeRect(-20, -20, 40, 40);
-            });
-            
-            // Create the physics body
-            const block = this.scene.matter.add.gameObject(container, {
+            // Create the physics body using the container
+            const physicsBody = this.scene.matter.add.gameObject(container, {
                 shape: {
                     type: 'rectangle',
                     width: 40,
@@ -181,76 +160,28 @@ export class PhysicsManager {
                 },
                 ignoreGravity: false,
                 sleepThreshold: 0
-            }) as any; // Using 'any' to avoid TypeScript errors with the game object
+            });
+            
+            // Get the actual Matter.js body from the physics body
+            const matterBody = physicsBody.body as Matter.Body;
             
             // Store the container reference on the physics body
-            if (block.body) {
-                (block.body as any).gameObject = container;
-            }
-            
-            // Debug: Add position update logging
-            this.scene.events.on('update', () => {
-                if (block.body) {
-                    container.x = block.body.position.x;
-                    container.y = block.body.position.y;
-                    container.rotation = block.body.angle;
-                }
-            });
+            (matterBody as any).gameObject = container;
             
             // Debug: Log block creation
             console.log('Created block:', {
-                id: block.body?.id,
-                position: block.body?.position,
+                id: matterBody.id,
+                position: matterBody.position,
                 container: { x: container.x, y: container.y },
                 visible: container.visible,
                 active: container.active
             });
-            container.y = block.position.y;
-            container.rotation = block.angle;
             
-            // Add a one-time update listener to verify the position after the first frame
-            this.scene.events.once('update', () => {
-                console.log('After first update:', {
-                    blockPos: block.position,
-                    containerPos: { x: container.x, y: container.y },
-                    containerVisible: container.visible,
-                    containerActive: container.active
-                });
-            });
-            
-            // Log block creation for debugging
-            console.log('Created block:', {
-                id: block.id,
-                position: block.position,
-                isStatic: block.isStatic,
-                label: block.label
-            });
-            
-            return block as unknown as BlockBody;
-            
-            if (!block) {
-                throw new Error('Failed to create block physics body');
-            }
-            
-            // Add text to the block
-            const blockText = this.scene.add.text(x, y, letter.toUpperCase(), {
-                fontSize: '20px',
-                color: '#000',
-                fontStyle: 'bold',
-                align: 'center'
-            }).setOrigin(0.5);
-            
-            // Store reference to the text in the body's game object
-            block.gameObject = this.scene.add.existing(blockText);
-            
-            // Ensure the block is added to the physics world
-            this.scene.matter.world.add(block);
-            
-            return block;
+            return matterBody as unknown as BlockBody;
             
         } catch (error) {
             console.error('Error creating block:', error);
-            throw error; // Re-throw to allow handling in the calling code
+            return null;
         }
     }
 
@@ -333,6 +264,33 @@ export class PhysicsManager {
     }
 
     /**
+     * Removes all constraints connected to a specific body
+     * @param body The physics body whose constraints should be removed
+     */
+    public removeConstraintsForBody(body: Matter.Body) {
+        try {
+            // Find constraints that involve this body
+            const constraintsToRemove = this.constraints.filter(constraint => {
+                return constraint.bodyA === body || constraint.bodyB === body;
+            });
+            
+            // Remove each constraint
+            constraintsToRemove.forEach(constraint => {
+                this.scene.matter.world.remove(constraint);
+                console.log('Removed constraint:', constraint.id);
+            });
+            
+            // Remove from our tracking array
+            this.constraints = this.constraints.filter(constraint => {
+                return constraint.bodyA !== body && constraint.bodyB !== body;
+            });
+            
+        } catch (error) {
+            console.error('Error removing constraints for body:', error);
+        }
+    }
+
+    /**
      * Destroys a physics body and cleans up its resources
      * @param body The physics body to destroy
      */
@@ -342,6 +300,9 @@ export class PhysicsManager {
                 console.warn('Cannot destroy null or undefined body');
                 return;
             }
+            
+            // Remove all constraints connected to this body first
+            this.removeConstraintsForBody(body);
             
             // Remove from static bodies set if present
             this.staticBodies.delete(body as MatterBodyWithGameObject);

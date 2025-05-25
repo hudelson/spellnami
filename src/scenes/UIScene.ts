@@ -32,8 +32,41 @@ export class UIScene extends Scene {
         // Show game over panel if it doesn't exist
         if (!this.gameOverPanel) {
             this.createGameOverPanel();
+        } else {
+            // Update the score in the existing panel
+            this.updateGameOverScore();
         }
         this.gameOverPanel.setVisible(true);
+    }
+
+    private updateGameOverScore() {
+        if (this.gameOverPanel) {
+            // Find the score text in the container and update it
+            const scoreText = this.gameOverPanel.list.find(child => 
+                child instanceof Phaser.GameObjects.Text && 
+                (child as Phaser.GameObjects.Text).text.includes('Score:')
+            ) as Phaser.GameObjects.Text;
+            
+            if (scoreText) {
+                scoreText.setText(`Final Score: ${this.score}`);
+            }
+        }
+    }
+
+    private restartGame() {
+        // Hide game over panel
+        this.gameOverPanel.setVisible(false);
+        
+        // Reset score
+        this.score = 0;
+        this.scoreText.setText('Score: 0');
+        
+        // Stop both scenes completely
+        this.scene.stop('GameScene');
+        this.scene.stop('UIScene');
+        
+        // Start fresh from title screen
+        this.scene.start('TitleScene');
     }
 
     private createGameOverPanel() {
@@ -57,7 +90,7 @@ export class UIScene extends Scene {
         }).setOrigin(0.5);
 
         // Add score text
-        const finalScoreText = this.add.text(0, -10, `Score: ${this.score}`, {
+        const finalScoreText = this.add.text(0, -10, `Final Score: ${this.score}`, {
             fontSize: '24px',
             color: '#fff'
         }).setOrigin(0.5);
@@ -66,11 +99,8 @@ export class UIScene extends Scene {
         const restartButton = this.add.rectangle(0, 60, 150, 50, 0x4CAF50)
             .setInteractive()
             .on('pointerdown', () => {
-                this.scene.stop('GameScene');
-                this.scene.start('TitleScene');
-                this.gameOverPanel.setVisible(false);
-                this.score = 0;
-                this.scoreText.setText('Score: 0');
+                // Properly reset and restart the game
+                this.restartGame();
             });
 
         const buttonText = this.add.text(0, 60, 'Play Again', {

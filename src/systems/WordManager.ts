@@ -77,9 +77,20 @@ export class WordManager {
         const word = this.wordList[Math.floor(Math.random() * this.wordList.length)];
         console.log('Creating word:', word);
         
-        // Calculate starting position (centered horizontally, above the visible area)
-        const startX = this.scene.cameras.main.width / 2 - (word.length * 20) / 2;
-        const startY = -100; // Start above the visible area
+        // Calculate starting position (random horizontal, at the top of the screen)
+        const screenWidth = this.scene.cameras.main.width;
+        const wordWidth = word.length * 40; // Each block is 40 pixels wide
+        const wallThickness = 32; // Account for the wall thickness
+        
+        // Calculate safe horizontal range (ensure word fits completely in play area)
+        const minX = wallThickness + 20; // Left wall + half block width
+        const maxX = screenWidth - wallThickness - wordWidth + 20; // Right wall - word width + half block width
+        
+        // Generate random X position within safe range
+        const startX = Math.random() * (maxX - minX) + minX;
+        const startY = 50; // Start at the top of the visible area
+        
+        console.log(`Word "${word}" spawning at x: ${startX.toFixed(1)} (safe range: ${minX.toFixed(1)} - ${maxX.toFixed(1)})`);
         
         // Create blocks for each letter
         const blocks: BlockBody[] = [];
@@ -105,13 +116,13 @@ export class WordManager {
             
             // Set initial velocity to make the word fall naturally
             const velocity = { 
-                x: (Math.random() - 0.5) * 1, // Very slight horizontal movement
-                y: this.difficulty.speed / 10  // Initial falling speed
+                x: (Math.random() - 0.5) * 0.5, // Very slight horizontal movement
+                y: this.difficulty.speed / 50  // Much slower initial falling speed
             };
             
             try {
                 // Set velocity directly on the block (which is the Matter.js body)
-                if (block) {
+                if (block && block.position) {
                     this.scene.matter.body.setVelocity(block, {
                         x: velocity.x,
                         y: velocity.y
@@ -121,7 +132,7 @@ export class WordManager {
                     console.log(`Created block at (${block.position.x.toFixed(1)}, ${block.position.y.toFixed(1)}) ` +
                               `with velocity (${velocity.x.toFixed(2)}, ${velocity.y.toFixed(2)})`);
                 } else {
-                    console.error('Block is undefined');
+                    console.error('Block is undefined or missing position:', block);
                 }
             } catch (error) {
                 console.error('Error setting block velocity:', error);

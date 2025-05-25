@@ -39,6 +39,10 @@ export class GameScene extends Scene {
     create(data: { difficulty?: string }) {
         console.log('GameScene create called');
         
+        // Reset game state
+        this.isGameOver = false;
+        this.currentWord = null;
+        
         // Get reference to UI scene
         this.uiScene = this.scene.get('UIScene') as UIScene;
         
@@ -62,17 +66,39 @@ export class GameScene extends Scene {
         // Set up world bounds with collision events
         const { width, height } = this.cameras.main;
         
-        // Configure physics world with proper gravity settings
-        this.matter.world.setGravity(0, 1);
+        // Clear any existing physics bodies (in case of restart)
+        const existingBodies = this.matter.world.getAllBodies();
+        existingBodies.forEach(body => {
+            if (!body.isStatic) {
+                this.matter.world.remove(body);
+            }
+        });
+        
+        // Configure physics world with slower gravity settings
+        this.matter.world.setGravity(0, 0.3);
         
         // Set up camera
         this.cameras.main.setBackgroundColor('#1a1a2e');
         this.cameras.main.setZoom(1);
         this.cameras.main.centerOn(width / 2, height / 2);
         
-        // Create bounds using Phaser's Matter API with thicker walls
+        // Create bounds manually to ensure proper collision detection
         const wallThickness = 32;
-        this.matter.world.setBounds(0, 0, width, height, wallThickness, true, true, true, true);
+        
+        // Create individual wall bodies manually
+        const topWall = this.matter.add.rectangle(width / 2, wallThickness / 2, width, wallThickness, { isStatic: true, label: 'Bounds Top' });
+        const bottomWall = this.matter.add.rectangle(width / 2, height - wallThickness / 2, width, wallThickness, { isStatic: true, label: 'Bounds Bottom' });
+        const leftWall = this.matter.add.rectangle(wallThickness / 2, height / 2, wallThickness, height, { isStatic: true, label: 'Bounds Left' });
+        const rightWall = this.matter.add.rectangle(width - wallThickness / 2, height / 2, wallThickness, height, { isStatic: true, label: 'Bounds Right' });
+        
+        // Store wall references for debugging
+        const walls = [topWall, rightWall, bottomWall, leftWall];
+        console.log('Created wall bodies:', walls.map(wall => ({
+            id: wall.id,
+            label: wall.label,
+            position: wall.position,
+            isStatic: wall.isStatic
+        })));
         
         // Enable Matter.js debug rendering with custom colors
         this.matter.world.drawDebug = true;
@@ -196,15 +222,7 @@ export class GameScene extends Scene {
             });
         });
         
-        // Label the bounds for collision detection
-        const boundsBodies = this.matter.world.walls as MatterJS.BodyType[];
-        if (boundsBodies && boundsBodies.length >= 4) {
-            // Top, Right, Bottom, Left - Phaser's internal order
-            boundsBodies[0].label = 'Bounds Top';
-            boundsBodies[1].label = 'Bounds Right';
-            boundsBodies[2].label = 'Bounds Bottom';
-            boundsBodies[3].label = 'Bounds Left';
-        }
+        // Bounds are now created manually with proper labels above
         
         console.log('Physics world initialized with bounds');
 
@@ -225,24 +243,16 @@ export class GameScene extends Scene {
 
 
     private spawnNextWord() {
-        if (this.isGameOver) return;
+        if (this.isGameOver || this.currentWord) return; // Don't spawn if we already have a word
 
+        console.log('Spawning new word...');
         // Create a new word
         this.currentWord = this.wordManager.createWord();
-        
-        // When the word is cleared, spawn the next one
-        this.matter.world.once('destroy', (event: any) => {
-            if (this.currentWord && this.currentWord.blocks.includes(event.body)) {
-                if (this.currentWord.blocks.every(block => !block || block.isStatic)) {
-                    this.scheduleNextWord();
-                }
-            }
-        });
     }
 
     private scheduleNextWord() {
-        // Small delay before spawning the next word
-        this.time.delayedCall(800, () => {
+        // Longer delay before spawning the next word
+        this.time.delayedCall(2500, () => {
             if (!this.isGameOver) {
                 this.spawnNextWord();
             }
@@ -278,11 +288,30 @@ export class GameScene extends Scene {
         const block = this.currentWord.blocks.shift();
         if (!block) return;
 
-        // Play burn effect
+        // Get the container (visual representation)
+        const container = block.gameObject as Phaser.GameObjects.Container;
+        
+        // Play burn effect at the block's position
         this.effectManager.playBurnEffect(block.position.x, block.position.y);
         
-        // Remove the block from physics world
-        this.matter.world.remove(block);
+        // Create a disappearing animation for the block
+        if (container) {
+            this.tweens.add({
+                targets: container,
+                alpha: 0,
+                scaleX: 1.5,
+                scaleY: 1.5,
+                duration: 300,
+                ease: 'Power2',
+                onComplete: () => {
+                    // Use PhysicsManager to properly destroy the block and its constraints
+                    this.physicsManager.destroyBody(block as Matter.Body);
+                }
+            });
+        } else {
+            // Fallback: use PhysicsManager to destroy if no container
+            this.physicsManager.destroyBody(block as Matter.Body);
+        }
         
         // Update score using the scene's event system
         this.events.emit('addScore', 10);
@@ -290,16 +319,23 @@ export class GameScene extends Scene {
         // If all blocks are cleared
         if (this.currentWord.blocks.length === 0) {
             this.currentWord = null;
-            this.scheduleNextWord();
+            // Spawn next word immediately when word is completed correctly
+            this.spawnNextWord();
         } else {
             // Update the word text (remove first character)
             this.currentWord.text = this.currentWord.text.substring(1);
             
-            // Update the next block's appearance
+            // Update the next block's appearance (highlight it)
             const nextBlock = this.currentWord.blocks[0];
             if (nextBlock) {
-                const sprite = nextBlock.gameObject as Phaser.Physics.Matter.Sprite;
-                sprite.setTint(0xffff00); // Highlight next block
+                const nextContainer = nextBlock.gameObject as Phaser.GameObjects.Container;
+                if (nextContainer && nextContainer.list && nextContainer.list.length > 1) {
+                    // Get the text object (second child in container)
+                    const textObject = nextContainer.list[1] as Phaser.GameObjects.Text;
+                    if (textObject && textObject.setStyle) {
+                        textObject.setStyle({ color: '#ffff00' }); // Highlight next letter
+                    }
+                }
             }
         }
     }
@@ -307,25 +343,47 @@ export class GameScene extends Scene {
     private handleWrongKey() {
         if (!this.currentWord) return;
         
-        // Convert remaining blocks to static and change their appearance
+        // Convert remaining blocks to frozen/inactive state
         this.currentWord.blocks.forEach(block => {
             if (block) {
-                // Use the physics manager to convert the block to static
-                // Cast to Matter.Body to match the expected parameter type
-                this.physicsManager.convertToStatic(block as Matter.Body);
-                const sprite = block.gameObject as Phaser.Physics.Matter.Sprite;
-                if (sprite) {
-                    sprite.setTint(0xadd8e6); // Light blue tint for static blocks
-                    this.effectManager.playFreezeEffect(block.position.x, block.position.y);
-                }
+                this.freezeBlock(block);
             }
         });
         
         // Clear the current word
         this.currentWord = null;
         
-        // Schedule next word
-        this.scheduleNextWord();
+        // Spawn next word immediately (no delay)
+        this.spawnNextWord();
+    }
+
+    private freezeBlock(block: BlockBody) {
+        // Mark the block as frozen by adding a custom property
+        (block as any).isFrozen = true;
+        
+        // Set a much faster downward velocity to clear the screen
+        this.matter.body.setVelocity(block, {
+            x: block.velocity.x, // Keep horizontal velocity
+            y: 8 // Much faster downward velocity
+        });
+        
+        // Change the visual appearance to indicate they're "frozen out"
+        const container = block.gameObject as Phaser.GameObjects.Container;
+        if (container && container.list && container.list.length > 0) {
+            // Get the graphics object (first child in container)
+            const graphics = container.list[0] as Phaser.GameObjects.Graphics;
+            if (graphics) {
+                // Change color to light blue to indicate frozen
+                graphics.clear();
+                graphics.fillStyle(0xadd8e6, 1); // Light blue
+                graphics.fillRect(-20, -20, 40, 40);
+                graphics.lineStyle(2, 0x87ceeb, 1);
+                graphics.strokeRect(-20, -20, 40, 40);
+            }
+            
+            // Play freeze effect
+            this.effectManager.playFreezeEffect(block.position.x, block.position.y);
+        }
     }
 
     /**
@@ -337,6 +395,8 @@ export class GameScene extends Scene {
             if (this.isGameOver || !event || !event.pairs || event.pairs.length === 0) {
                 return;
             }
+            
+            console.log(`Collision detected! ${event.pairs.length} pairs`);
             
             for (const pair of event.pairs) {
                 if (!pair.bodyA || !pair.bodyB) {
@@ -352,31 +412,62 @@ export class GameScene extends Scene {
                     continue;
                 }
                 
+                console.log('Collision pair:', {
+                    bodyA: { id: bodyA.id, label: bodyA.label, isStatic: bodyA.isStatic, hasGameObject: !!bodyA.gameObject },
+                    bodyB: { id: bodyB.id, label: bodyB.label, isStatic: bodyB.isStatic, hasGameObject: !!bodyB.gameObject }
+                });
+                
                 // Check for bottom collisions
                 const isBodyABottomCollision = this.isBottomCollision(bodyA, bodyB);
                 const isBodyBBottomCollision = this.isBottomCollision(bodyB, bodyA);
                 
                 if (isBodyABottomCollision || isBodyBBottomCollision) {
-                    if (this.currentWord && this.currentWord.blocks) {
-                        const isBodyAInCurrentWord = this.currentWord.blocks.some(block => block === bodyA);
-                        const isBodyBInCurrentWord = this.currentWord.blocks.some(block => block === bodyB);
+                    // Determine which body is the block (not the bottom boundary)
+                    const blockBody = bodyA.label === 'Bounds Bottom' ? bodyB : bodyA;
+                    
+                    // Only handle blocks that have game objects (actual letter blocks)
+                    if (blockBody.gameObject) {
+                        console.log('Block hit the bottom - handling collision');
                         
-                        if (isBodyAInCurrentWord || isBodyBInCurrentWord) {
-                            // Word hit the bottom, convert to static
-                            this.handleWrongKey();
-                            break; // Exit after handling the collision
+                        // Check if this block is part of the current active word
+                        if (this.currentWord && this.currentWord.blocks) {
+                            const isBlockInCurrentWord = this.currentWord.blocks.some(block => block === blockBody);
+                            
+                            if (isBlockInCurrentWord) {
+                                console.log('Active word hit the bottom - freezing entire word');
+                                // Active word hit the bottom, freeze the entire word
+                                this.handleWrongKey();
+                                break; // Exit after handling the collision
+                            }
+                        }
+                        
+                        // If it's not part of current word, it might be a frozen block
+                        // Make sure it's properly marked as frozen and has correct velocity
+                        if (!(blockBody as any).isFrozen) {
+                            console.log('Unfrozen block hit bottom - marking as frozen');
+                            this.freezeBlock(blockBody);
                         }
                     }
                 }
                 
-                // Check if any block is too high (game over)
-                if (this.isGameOver) {
+                // Check for word-to-word collisions (active word hitting frozen blocks)
+                const isWordToWordCollision = this.isWordToWordCollision(bodyA, bodyB);
+                if (isWordToWordCollision) {
+                    console.log('Active word hit frozen blocks - freezing current word');
+                    this.handleWrongKey();
+                    break; // Exit after handling the collision
+                }
+                
+                // Check for top collisions (game over condition)
+                const isTopCollision = this.isTopCollision(bodyA, bodyB);
+                if (isTopCollision) {
+                    console.log('Dead letter hit the top - GAME OVER');
+                    this.gameOver();
                     break;
                 }
                 
-                const highestBlock = this.physicsManager.findHighestBlock();
-                if (highestBlock?.position?.y !== undefined && highestBlock.position.y <= 32) {
-                    this.gameOver();
+                // Check if any block is too high (game over)
+                if (this.isGameOver) {
                     break;
                 }
             }
@@ -386,15 +477,95 @@ export class GameScene extends Scene {
     }
 
     private isBottomCollision(bodyA: BlockBody, bodyB: BlockBody): boolean {
-        // Check if bodyA is the bottom bounds and bodyB is a block with a game object
-        if (bodyA.label === 'Bounds Bottom' && bodyB.gameObject) {
+        const { height } = this.cameras.main;
+        const wallThickness = 32;
+        const bottomY = height - wallThickness / 2; // Bottom boundary center position
+        
+        // Check if bodyA is the bottom bounds (by label or position) and bodyB is a block
+        const isBodyABottom = (bodyA.label === 'Bounds Bottom' || 
+                              (bodyA.isStatic && Math.abs(bodyA.position.y - bottomY) < 20));
+        const isBodyBBottom = (bodyB.label === 'Bounds Bottom' || 
+                              (bodyB.isStatic && Math.abs(bodyB.position.y - bottomY) < 20));
+        
+        if (isBodyABottom && bodyB.gameObject) {
+            console.log('Bottom collision detected: bodyA is bottom, bodyB is block', {
+                bodyA: { id: bodyA.id, label: bodyA.label, y: bodyA.position.y, isStatic: bodyA.isStatic },
+                bodyB: { id: bodyB.id, label: bodyB.label, y: bodyB.position.y, hasGameObject: !!bodyB.gameObject }
+            });
             return true;
         }
-        // Also check the reverse case where bodyB is the bottom bounds
-        if (bodyB.label === 'Bounds Bottom' && bodyA.gameObject) {
+        
+        if (isBodyBBottom && bodyA.gameObject) {
+            console.log('Bottom collision detected: bodyB is bottom, bodyA is block', {
+                bodyA: { id: bodyA.id, label: bodyA.label, y: bodyA.position.y, hasGameObject: !!bodyA.gameObject },
+                bodyB: { id: bodyB.id, label: bodyB.label, y: bodyB.position.y, isStatic: bodyB.isStatic }
+            });
             return true;
         }
+        
         return false;
+    }
+
+    private isWordToWordCollision(bodyA: BlockBody, bodyB: BlockBody): boolean {
+        // Only check if we have a current active word
+        if (!this.currentWord || !this.currentWord.blocks) {
+            return false;
+        }
+        
+        // Check if one body is from the current word and the other is frozen
+        const isBodyAInCurrentWord = this.currentWord.blocks.some(block => block === bodyA);
+        const isBodyBInCurrentWord = this.currentWord.blocks.some(block => block === bodyB);
+        
+        // Check if either body is frozen (from a previous word)
+        const isBodyAFrozen = (bodyA as any).isFrozen === true;
+        const isBodyBFrozen = (bodyB as any).isFrozen === true;
+        
+        // Collision detected if:
+        // - One body is from current word AND the other is frozen
+        // - Both bodies have game objects (are actual letter blocks, not walls)
+        const collision = (
+            (isBodyAInCurrentWord && isBodyBFrozen && !!bodyB.gameObject) ||
+            (isBodyBInCurrentWord && isBodyAFrozen && !!bodyA.gameObject)
+        );
+        
+        if (collision) {
+            console.log('Word-to-word collision detected:', {
+                bodyA: { id: bodyA.id, inCurrentWord: isBodyAInCurrentWord, frozen: isBodyAFrozen },
+                bodyB: { id: bodyB.id, inCurrentWord: isBodyBInCurrentWord, frozen: isBodyBFrozen }
+            });
+        }
+        
+        return collision;
+    }
+
+    private isTopCollision(bodyA: BlockBody, bodyB: BlockBody): boolean {
+        const wallThickness = 32;
+        const topY = wallThickness / 2; // Top boundary center position
+        
+        // Check if a frozen/dead letter hits the top boundary (by label or position)
+        const isBodyATopBounds = (bodyA.label === 'Bounds Top' || 
+                                 (bodyA.isStatic && Math.abs(bodyA.position.y - topY) < 20));
+        const isBodyBTopBounds = (bodyB.label === 'Bounds Top' || 
+                                 (bodyB.isStatic && Math.abs(bodyB.position.y - topY) < 20));
+        
+        // Check if either body is frozen (dead letter)
+        const isBodyAFrozen = (bodyA as any).isFrozen === true;
+        const isBodyBFrozen = (bodyB as any).isFrozen === true;
+        
+        // Game over if a frozen letter hits the top boundary
+        const topCollision = (
+            (isBodyATopBounds && isBodyBFrozen && !!bodyB.gameObject) ||
+            (isBodyBTopBounds && isBodyAFrozen && !!bodyA.gameObject)
+        );
+        
+        if (topCollision) {
+            console.log('Top collision detected - frozen letter hit ceiling:', {
+                bodyA: { id: bodyA.id, isTop: isBodyATopBounds, frozen: isBodyAFrozen },
+                bodyB: { id: bodyB.id, isTop: isBodyBTopBounds, frozen: isBodyBFrozen }
+            });
+        }
+        
+        return topCollision;
     }
 
     private gameOver() {
@@ -403,9 +574,9 @@ export class GameScene extends Scene {
         this.isGameOver = true;
         
         try {
-            // Pause physics if available
-            if (this.physics && typeof this.physics.pause === 'function') {
-                this.physics.pause();
+            // Disable input immediately
+            if (this.input && this.input.keyboard) {
+                this.input.keyboard.off('keydown');
             }
             
             // Stop all timers
@@ -413,16 +584,66 @@ export class GameScene extends Scene {
                 this.time.removeAllEvents();
             }
             
-            // Notify UI about game over using the scene's event system
-            this.events.emit('gameOver');
+            // Create dramatic explosion effect for all remaining blocks
+            this.explodeAllBlocks();
             
-            // Disable input
-            if (this.input && this.input.keyboard) {
-                this.input.keyboard.off('keydown');
-            }
+            // Add screen flash effect
+            this.effectManager.playScreenFlash();
+            
+            // Delay the game over UI to let the explosion play out
+            this.time.delayedCall(2000, () => {
+                // Pause physics after explosions
+                if (this.physics && typeof this.physics.pause === 'function') {
+                    this.physics.pause();
+                }
+                
+                // Notify UI about game over using the scene's event system
+                this.events.emit('gameOver');
+            });
+            
         } catch (error) {
             console.error('Error in gameOver:', error);
         }
+    }
+
+    private explodeAllBlocks() {
+        // Get all bodies in the physics world
+        const allBodies = this.matter.world.getAllBodies();
+        let explosionDelay = 0;
+        
+        allBodies.forEach((body) => {
+            // Only explode blocks that have game objects (letter blocks)
+            if (body.gameObject && !body.isStatic) {
+                const container = body.gameObject as Phaser.GameObjects.Container;
+                
+                // Play explosion effect at block position with staggered timing
+                this.effectManager.playExplosionEffect(body.position.x, body.position.y, explosionDelay);
+                
+                // Animate the block disappearing
+                if (container) {
+                    this.time.delayedCall(explosionDelay, () => {
+                        this.tweens.add({
+                            targets: container,
+                            alpha: 0,
+                            scaleX: 2,
+                            scaleY: 2,
+                            rotation: (Math.random() - 0.5) * Math.PI,
+                            duration: 800,
+                            ease: 'Power2',
+                            onComplete: () => {
+                                // Destroy the block after animation
+                                this.physicsManager.destroyBody(body as Matter.Body);
+                            }
+                        });
+                    });
+                }
+                
+                // Stagger the explosions for dramatic effect
+                explosionDelay += 100 + Math.random() * 200;
+            }
+        });
+        
+        console.log(`Exploding ${allBodies.filter(b => b.gameObject && !b.isStatic).length} blocks`);
     }
 
     /**
@@ -434,14 +655,15 @@ export class GameScene extends Scene {
                 return;
             }
             
-            // Check for game over condition (block too high)
+            // Check for game over condition (frozen blocks too high)
             const highestBlock = this.physicsManager.findHighestBlock();
             
             // Only check for game over if we have a valid block with a position
             if (highestBlock?.position?.y !== undefined) {
-                const gameOverY = 50; // Y-coordinate threshold for game over
+                const gameOverY = 80; // Y-coordinate threshold for game over (slightly below spawn area)
                 const currentY = highestBlock.position.y;
                 const isBlockTooHigh = currentY <= gameOverY;
+                const isBlockFrozen = (highestBlock as any).isFrozen === true;
                 
                 // Only log every 60 frames to reduce console spam
                 if (this.game?.loop?.frame % 60 === 0) {
@@ -450,14 +672,15 @@ export class GameScene extends Scene {
                         blockY: currentY.toFixed(2),
                         gameOverY,
                         isBlockTooHigh,
-                        isStatic: highestBlock.isStatic,
+                        isFrozen: isBlockFrozen,
                         hasGameObject: !!highestBlock.gameObject,
                         blockLabel: highestBlock.label || 'no-label'
                     });
                 }
                 
-                if (isBlockTooHigh) {
-                    console.log('GAME OVER - Block reached the top of the screen at y:', currentY.toFixed(2));
+                // Game over if frozen blocks reach too high (near spawn area)
+                if (isBlockTooHigh && isBlockFrozen) {
+                    console.log('GAME OVER - Frozen blocks reached too high at y:', currentY.toFixed(2));
                     this.gameOver();
                 }
             }
@@ -465,10 +688,23 @@ export class GameScene extends Scene {
             console.error('Error in update loop:', error);
         }
         
-        // If we have no current word, spawn a new one
-        if (!this.currentWord) {
-            console.log('No current word, spawning a new one');
-            this.spawnNextWord();
+        // Don't automatically spawn words here - let the game logic handle it
+    }
+
+    shutdown() {
+        // Clean up managers when scene is shut down
+        if (this.effectManager) {
+            this.effectManager.destroy();
+        }
+        
+        // Remove event listeners
+        if (this.input && this.input.keyboard) {
+            this.input.keyboard.off('keydown');
+        }
+        
+        // Clear timers
+        if (this.time) {
+            this.time.removeAllEvents();
         }
     }
 }

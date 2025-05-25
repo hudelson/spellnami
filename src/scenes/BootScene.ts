@@ -8,8 +8,8 @@ export class BootScene extends Scene {
     preload() {
         // Load particle textures as images
         this.load.setPath('');
-        this.load.image('flame', '/assets/particles/flame.svg');
-        this.load.image('snow-puff', '/assets/particles/snow-puff.svg');
+        this.load.image('flame', '/assets/particles/flame.png');
+        this.load.image('snow-puff', '/assets/particles/snow-puff.png');
         
         // Load block texture (simple white rectangle)
         const block = this.make.graphics(undefined, false);

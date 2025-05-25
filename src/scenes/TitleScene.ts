@@ -9,6 +9,11 @@ interface ButtonConfig {
     onClick: () => void;
 }
 
+interface DifficultyButtonConfig extends ButtonConfig {
+    normalColor: number;
+    hoverColor: number;
+}
+
 class Button extends Phaser.GameObjects.Container {
     private background: Phaser.GameObjects.Rectangle;
     private text: Phaser.GameObjects.Text;
@@ -75,6 +80,73 @@ class Button extends Phaser.GameObjects.Container {
     setColor(color: number) {
         this.background.setFillStyle(color);
         return this;
+    }
+}
+
+class DifficultyButton extends Phaser.GameObjects.Container {
+    private background: Phaser.GameObjects.Rectangle;
+    private text: Phaser.GameObjects.Text;
+    private normalColor: number;
+    private hoverColor: number;
+    private onClick: () => void;
+
+    constructor(config: DifficultyButtonConfig) {
+        super(config.scene, config.x, config.y);
+        this.scene = config.scene;
+        this.normalColor = config.normalColor;
+        this.hoverColor = config.hoverColor;
+        this.onClick = config.onClick;
+        
+        // Create button background
+        this.background = this.scene.add.rectangle(0, 0, 200, 50, this.normalColor)
+            .setInteractive()
+            .on('pointerover', () => this.onHover())
+            .on('pointerout', () => this.onOut())
+            .on('pointerdown', () => this.onClickHandler());
+        
+        // Create button text
+        this.text = this.scene.add.text(0, 0, config.text, config.style).setOrigin(0.5);
+        
+        // Add to container
+        this.add([this.background, this.text]);
+        
+        // Add to scene
+        this.scene.add.existing(this);
+    }
+    
+    private onHover() {
+        this.background.setFillStyle(this.hoverColor);
+        this.scene.tweens.add({
+            targets: this,
+            scaleX: 1.05,
+            scaleY: 1.05,
+            duration: 100
+        });
+    }
+    
+    private onOut() {
+        this.background.setFillStyle(this.normalColor);
+        this.scene.tweens.add({
+            targets: this,
+            scaleX: 1,
+            scaleY: 1,
+            duration: 100
+        });
+    }
+    
+    private onClickHandler() {
+        this.scene.tweens.add({
+            targets: this,
+            scaleX: 0.95,
+            scaleY: 0.95,
+            duration: 50,
+            yoyo: true,
+            onComplete: () => {
+                if (this.onClick) {
+                    this.onClick();
+                }
+            }
+        });
     }
 }
 
@@ -153,7 +225,7 @@ export class TitleScene extends Scene {
         ];
         
         difficulties.forEach((difficulty) => {
-            const button = new Button({
+            const button = new DifficultyButton({
                 scene: this,
                 x: this.cameras.main.width / 2,
                 y: buttonYStart + difficulty.y,
@@ -165,32 +237,9 @@ export class TitleScene extends Scene {
                     stroke: '#000',
                     strokeThickness: 2
                 },
-                onClick: () => this.startGame(difficulty.key as 'apprentice' | 'scholar' | 'master')
-            }).setColor(difficulty.color);
-            
-            // Store the original color
-            const originalColor = difficulty.color;
-            const hoverColor = difficulty.hoverColor;
-            
-            // Add hover effect with custom colors
-            button.on('pointerover', () => {
-                button.setColor(hoverColor);
-                this.tweens.add({
-                    targets: button,
-                    scaleX: 1.1,
-                    scaleY: 1.1,
-                    duration: 200
-                });
-            });
-            
-            button.on('pointerout', () => {
-                button.setColor(originalColor);
-                this.tweens.add({
-                    targets: button,
-                    scaleX: 1,
-                    scaleY: 1,
-                    duration: 200
-                });
+                onClick: () => this.startGame(difficulty.key as 'apprentice' | 'scholar' | 'master'),
+                normalColor: difficulty.color,
+                hoverColor: difficulty.hoverColor
             });
         });
         

@@ -59,6 +59,60 @@ export class EffectManager {
         this.freezeEffects.push(effect);
     }
 
+    public playExplosionEffect(x: number, y: number, delay: number = 0) {
+        // Create multiple flame sprites for explosion effect
+        const numFlames = 5;
+        const effects: Phaser.GameObjects.Sprite[] = [];
+        
+        this.scene.time.delayedCall(delay, () => {
+            for (let i = 0; i < numFlames; i++) {
+                const angle = (i / numFlames) * Math.PI * 2;
+                const distance = 20 + Math.random() * 30;
+                const offsetX = Math.cos(angle) * distance;
+                const offsetY = Math.sin(angle) * distance;
+                
+                const effect = this.scene.add.sprite(x + offsetX, y + offsetY, 'flame')
+                    .setScale(0.3 + Math.random() * 0.4)
+                    .setAlpha(1)
+                    .setRotation(Math.random() * Math.PI * 2);
+                
+                // Animate the explosion effect
+                this.scene.tweens.add({
+                    targets: effect,
+                    scale: effect.scale * 2,
+                    alpha: 0,
+                    rotation: effect.rotation + (Math.random() - 0.5) * Math.PI,
+                    duration: 600 + Math.random() * 400,
+                    ease: 'Power2',
+                    onComplete: () => {
+                        effect.destroy();
+                    }
+                });
+                
+                effects.push(effect);
+            }
+        });
+    }
+
+    public playScreenFlash() {
+        // Create a full-screen flash effect
+        const { width, height } = this.scene.cameras.main;
+        const flash = this.scene.add.rectangle(width / 2, height / 2, width, height, 0xffffff)
+            .setAlpha(0.8)
+            .setDepth(999);
+        
+        // Animate the flash
+        this.scene.tweens.add({
+            targets: flash,
+            alpha: 0,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => {
+                flash.destroy();
+            }
+        });
+    }
+
     public destroy() {
         // Clean up all effects
         this.burnEffects.forEach(effect => effect.destroy());
