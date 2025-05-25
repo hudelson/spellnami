@@ -19,6 +19,7 @@ export class UIScene extends Scene {
     };
     private currentDifficulty!: string;
     private topScores: number[] = [];
+    private scoreAlreadyRecorded: boolean = false;
 
     constructor() {
         super('UIScene');
@@ -47,19 +48,25 @@ export class UIScene extends Scene {
         }
     }
 
-    private updateTopScores(newScore: number) {
-        // Add the new score to the list
-        this.topScores.push(newScore);
+    private updateTopScores(newScore: number): boolean {
+        // Check if this score qualifies for top 3
+        const wouldBeTopScore = this.topScores.length < 3 || newScore > this.topScores[2];
         
-        // Sort in descending order and keep only top 3
-        this.topScores.sort((a, b) => b - a);
-        this.topScores = this.topScores.slice(0, 3);
+        if (wouldBeTopScore) {
+            // Add the new score to the list
+            this.topScores.push(newScore);
+            
+            // Sort in descending order and keep only top 3
+            this.topScores.sort((a, b) => b - a);
+            this.topScores = this.topScores.slice(0, 3);
+            
+            // Save to localStorage
+            this.saveTopScores();
+            
+            return true;
+        }
         
-        // Save to localStorage
-        this.saveTopScores();
-        
-        // Return true if this is a new high score (top 3)
-        return this.topScores.includes(newScore);
+        return false;
     }
 
     private addScore(points: number) {
@@ -68,8 +75,11 @@ export class UIScene extends Scene {
     }
 
     private showGameOver() {
-        // Update top scores with current score
-        const isNewHighScore = this.updateTopScores(this.score);
+        // Only update top scores once per game session
+        if (!this.scoreAlreadyRecorded) {
+            const isNewHighScore = this.updateTopScores(this.score);
+            this.scoreAlreadyRecorded = true;
+        }
         
         // Show game over panel if it doesn't exist
         if (!this.gameOverPanel) {
@@ -118,8 +128,9 @@ export class UIScene extends Scene {
         // Hide game over panel
         this.gameOverPanel.setVisible(false);
         
-        // Reset score
+        // Reset score and score recording flag
         this.score = 0;
+        this.scoreAlreadyRecorded = false;
         this.scoreText.setText('Score: 0');
         
         // Stop both scenes completely
@@ -218,6 +229,9 @@ export class UIScene extends Scene {
     }
 
     create(data: { difficulty: string; settings: any }) {
+        // Reset score recording flag for new game
+        this.scoreAlreadyRecorded = false;
+        
         // Get difficulty from scene data or registry
         if (data && data.difficulty) {
             this.currentDifficulty = data.difficulty;

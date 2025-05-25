@@ -447,15 +447,29 @@ export class GameScene extends Scene {
         const isBodyAFrozen = (bodyA as any).isFrozen === true;
         const isBodyBFrozen = (bodyB as any).isFrozen === true;
         
+        // Define spawn area to avoid false game overs
+        const topMarginHeight = 80;
+        const spawnAreaBottom = topMarginHeight + 60; // Give some buffer below spawn area
+        
+        // Check if frozen block is still in or near spawn area (likely still falling)
+        const frozenBlockInSpawnArea = (
+            (isBodyAFrozen && bodyA.position && bodyA.position.y < spawnAreaBottom) ||
+            (isBodyBFrozen && bodyB.position && bodyB.position.y < spawnAreaBottom)
+        );
+        
+        // If frozen block is in spawn area, don't trigger collision (let it fall through)
+        if (frozenBlockInSpawnArea) {
+            return false;
+        }
+        
         // Collision detected if:
         // - One body is from current word AND the other is frozen
         // - Both bodies have game objects (are actual letter blocks, not walls)
+        // - Frozen block is not in spawn area (has settled lower)
         const collision = (
             (isBodyAInCurrentWord && isBodyBFrozen && !!bodyB.gameObject) ||
             (isBodyBInCurrentWord && isBodyAFrozen && !!bodyA.gameObject)
         );
-        
-        // Collision logic handled above
         
         return collision;
     }
@@ -721,11 +735,13 @@ export class GameScene extends Scene {
                 const isBlockTooHigh = currentY <= gameOverY;
                 const isBlockFrozen = (highestBlock as any).isFrozen === true;
                 
-                // Monitor game over conditions silently
+                // Additional check: make sure the block has low velocity (settled, not just passing through)
+                const blockVelocity = highestBlock.velocity;
+                const isBlockSettled = blockVelocity && Math.abs(blockVelocity.y) < 0.5; // Very slow vertical movement
                 
-                // Game over if frozen blocks reach too high (near spawn area)
-                if (isBlockTooHigh && isBlockFrozen) {
-                    console.log('GAME OVER - Frozen blocks reached too high at y:', currentY.toFixed(2));
+                // Game over if frozen blocks reach too high AND have settled (not just falling through)
+                if (isBlockTooHigh && isBlockFrozen && isBlockSettled) {
+                    console.log('GAME OVER - Frozen blocks settled too high at y:', currentY.toFixed(2), 'velocity:', blockVelocity?.y?.toFixed(2));
                     this.gameOver();
                 }
             }
