@@ -315,12 +315,40 @@ export class GameScene extends Scene {
             // Get the graphics object (first child in container)
             const graphics = container.list[0] as Phaser.GameObjects.Graphics;
             if (graphics) {
-                // Change color to light blue to indicate frozen
+                // Create pixel-art style frozen block (icy blue)
                 graphics.clear();
-                graphics.fillStyle(0xadd8e6, 1); // Light blue
+                
+                // Main block body - icy blue
+                graphics.fillStyle(0x74b9ff, 1);
                 graphics.fillRect(-20, -20, 40, 40);
-                graphics.lineStyle(2, 0x87ceeb, 1);
-                graphics.strokeRect(-20, -20, 40, 40);
+                
+                // Pixel-art style highlights and shadows for frozen look
+                // Top highlight (very light blue/white)
+                graphics.fillStyle(0xe17055, 1);
+                graphics.fillRect(-20, -20, 40, 4); // Top edge
+                graphics.fillRect(-20, -20, 4, 40); // Left edge
+                
+                // Inner highlight
+                graphics.fillStyle(0xa29bfe, 1);
+                graphics.fillRect(-16, -16, 32, 4); // Inner top
+                graphics.fillRect(-16, -16, 4, 32); // Inner left
+                
+                // Bottom shadow (darker blue)
+                graphics.fillStyle(0x0984e3, 1);
+                graphics.fillRect(-20, 16, 40, 4); // Bottom edge
+                graphics.fillRect(16, -20, 4, 40); // Right edge
+                
+                // Inner shadow
+                graphics.fillStyle(0x2d3436, 1);
+                graphics.fillRect(-16, 12, 32, 4); // Inner bottom
+                graphics.fillRect(12, -16, 4, 32); // Inner right
+                
+                // Add some ice crystal pixels for extra frozen effect
+                graphics.fillStyle(0xffffff, 0.8);
+                graphics.fillRect(-8, -8, 2, 2);
+                graphics.fillRect(6, -12, 2, 2);
+                graphics.fillRect(-12, 8, 2, 2);
+                graphics.fillRect(10, 6, 2, 2);
             }
             
             // Play freeze effect
@@ -679,39 +707,68 @@ export class GameScene extends Scene {
         const headerHeight = 60;
         const headerY = topMarginHeight - headerHeight - 10;
         
-        // Header background
+        // Create pixel-art style header background
         const headerBg = this.add.graphics();
-        headerBg.fillStyle(0x000000, 0.8);
-        headerBg.fillRoundedRect(sideMarginWidth, headerY, width - (sideMarginWidth * 2), headerHeight, 8);
-        headerBg.lineStyle(2, 0x00ffff, 0.6);
-        headerBg.strokeRoundedRect(sideMarginWidth, headerY, width - (sideMarginWidth * 2), headerHeight, 8);
+        
+        // Main header background - dark
+        headerBg.fillStyle(0x2c3e50, 1);
+        headerBg.fillRect(sideMarginWidth, headerY, width - (sideMarginWidth * 2), headerHeight);
+        
+        // Pixel-art style border highlights
+        // Top highlight
+        headerBg.fillStyle(0x5dade2, 1);
+        headerBg.fillRect(sideMarginWidth, headerY, width - (sideMarginWidth * 2), 4);
+        headerBg.fillRect(sideMarginWidth, headerY, 4, headerHeight);
+        
+        // Bottom shadow
+        headerBg.fillStyle(0x1a252f, 1);
+        headerBg.fillRect(sideMarginWidth, headerY + headerHeight - 4, width - (sideMarginWidth * 2), 4);
+        headerBg.fillRect(width - sideMarginWidth - 4, headerY, 4, headerHeight);
+        
+        // Inner highlights
+        headerBg.fillStyle(0x3498db, 1);
+        headerBg.fillRect(sideMarginWidth + 4, headerY + 4, width - (sideMarginWidth * 2) - 8, 2);
+        headerBg.fillRect(sideMarginWidth + 4, headerY + 4, 2, headerHeight - 8);
+        
         headerBg.setDepth(15);
         
-        // Score section (left side)
+        // Score section (left side) - pixel-art style text
         this.add.text(sideMarginWidth + 20, headerY + 10, 'SCORE', {
-            fontSize: '14px',
+            fontSize: '12px',
             color: '#00ffff',
-            fontStyle: 'bold'
+            fontFamily: 'monospace',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 1
         }).setDepth(20);
         
-        // Next word section (right side)
+        // Next word section (right side) - pixel-art style text
         this.add.text(width - sideMarginWidth - 120, headerY + 10, 'NEXT WORD', {
-            fontSize: '14px',
+            fontSize: '12px',
             color: '#00ffff',
-            fontStyle: 'bold'
+            fontFamily: 'monospace',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 1
         }).setDepth(20);
         
-        // Store references for updating
+        // Store references for updating - pixel-art style
         this.headerScoreText = this.add.text(sideMarginWidth + 20, headerY + 30, '0', {
-            fontSize: '18px',
+            fontSize: '16px',
             color: '#ffffff',
-            fontStyle: 'bold'
+            fontFamily: 'monospace',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
         }).setDepth(20);
         
         this.headerNextWordText = this.add.text(width - sideMarginWidth - 120, headerY + 30, '', {
-            fontSize: '16px',
+            fontSize: '14px',
             color: '#ffff00',
-            fontStyle: 'bold'
+            fontFamily: 'monospace',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
         }).setDepth(20);
     }
 

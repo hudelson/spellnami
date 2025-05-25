@@ -119,19 +119,43 @@ export class PhysicsManager {
             // Create a container for the block
             const container = this.scene.add.container(x, y);
             
-            // Create a simple rectangle for the block
+            // Create pixel-art style block with chunky pixels
             const blockGraphic = this.scene.add.graphics();
-            blockGraphic.fillStyle(0x3498db, 1);
-            blockGraphic.fillRect(-20, -20, 40, 40);
-            blockGraphic.lineStyle(2, 0x2980b9, 1);
-            blockGraphic.strokeRect(-20, -20, 40, 40);
             
-            // Add text for the letter
+            // Main block body - darker blue
+            blockGraphic.fillStyle(0x2c3e50, 1);
+            blockGraphic.fillRect(-20, -20, 40, 40);
+            
+            // Pixel-art style highlights and shadows
+            // Top highlight (light blue)
+            blockGraphic.fillStyle(0x5dade2, 1);
+            blockGraphic.fillRect(-20, -20, 40, 4); // Top edge
+            blockGraphic.fillRect(-20, -20, 4, 40); // Left edge
+            
+            // Inner highlight
+            blockGraphic.fillStyle(0x3498db, 1);
+            blockGraphic.fillRect(-16, -16, 32, 4); // Inner top
+            blockGraphic.fillRect(-16, -16, 4, 32); // Inner left
+            
+            // Bottom shadow (dark blue)
+            blockGraphic.fillStyle(0x1a252f, 1);
+            blockGraphic.fillRect(-20, 16, 40, 4); // Bottom edge
+            blockGraphic.fillRect(16, -20, 4, 40); // Right edge
+            
+            // Inner shadow
+            blockGraphic.fillStyle(0x21618c, 1);
+            blockGraphic.fillRect(-16, 12, 32, 4); // Inner bottom
+            blockGraphic.fillRect(12, -16, 4, 32); // Inner right
+            
+            // Add pixel-art style text for the letter
             const letterText = this.scene.add.text(0, 0, letter.toUpperCase(), {
-                fontSize: '24px',
+                fontSize: '20px',
                 color: '#ffffff',
+                fontFamily: 'monospace',
                 fontStyle: 'bold',
-                align: 'center'
+                align: 'center',
+                stroke: '#000000',
+                strokeThickness: 2
             }).setOrigin(0.5);
             
             // Add children to container

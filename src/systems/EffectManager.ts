@@ -1,95 +1,166 @@
 import { Scene } from 'phaser';
 
-// Simple effect system that doesn't rely on the particle system
-// since we're having issues with the Phaser 3.60 particle API
+// Pixel-art effect system using graphics instead of sprites
 export class EffectManager {
     private scene: Scene;
-    private burnEffects: Phaser.GameObjects.Sprite[] = [];
-    private freezeEffects: Phaser.GameObjects.Sprite[] = [];
 
     constructor(scene: Scene) {
         this.scene = scene;
     }
 
     public playBurnEffect(x: number, y: number) {
-        // Create a simple sprite effect
-        const effect = this.scene.add.sprite(x, y, 'flame')
-            .setScale(0.5)
-            .setAlpha(1);
+        // Create pixel-art style burn effect using graphics
+        const effect = this.scene.add.graphics();
+        effect.setPosition(x, y);
+        
+        // Create flame-like pixel pattern
+        const flameColors = [0xff6b35, 0xff8e53, 0xffa726, 0xffcc02];
+        const pixels = [
+            { x: -2, y: -6, size: 2 },
+            { x: 0, y: -8, size: 2 },
+            { x: 2, y: -6, size: 2 },
+            { x: -4, y: -4, size: 2 },
+            { x: -2, y: -4, size: 2 },
+            { x: 0, y: -4, size: 2 },
+            { x: 2, y: -4, size: 2 },
+            { x: 4, y: -4, size: 2 },
+            { x: -4, y: -2, size: 2 },
+            { x: -2, y: -2, size: 2 },
+            { x: 0, y: -2, size: 2 },
+            { x: 2, y: -2, size: 2 },
+            { x: 4, y: -2, size: 2 },
+            { x: -2, y: 0, size: 2 },
+            { x: 0, y: 0, size: 2 },
+            { x: 2, y: 0, size: 2 }
+        ];
+        
+        pixels.forEach((pixel, index) => {
+            const colorIndex = Math.floor(Math.random() * flameColors.length);
+            effect.fillStyle(flameColors[colorIndex], 1);
+            effect.fillRect(pixel.x, pixel.y, pixel.size, pixel.size);
+        });
         
         // Animate the effect
         this.scene.tweens.add({
             targets: effect,
-            scale: 1,
+            scaleX: 1.5,
+            scaleY: 1.5,
             alpha: 0,
+            y: y - 20,
             duration: 400,
+            ease: 'Power2',
             onComplete: () => {
                 effect.destroy();
-                const index = this.burnEffects.indexOf(effect);
-                if (index > -1) {
-                    this.burnEffects.splice(index, 1);
-                }
             }
         });
-        
-        this.burnEffects.push(effect);
     }
 
     public playFreezeEffect(x: number, y: number) {
-        // Create a simple sprite effect
-        const effect = this.scene.add.sprite(x, y, 'snow-puff')
-            .setScale(0.3)
-            .setAlpha(1);
+        // Create pixel-art style freeze effect using graphics
+        const effect = this.scene.add.graphics();
+        effect.setPosition(x, y);
+        
+        // Create snowflake/ice crystal pixel pattern
+        const iceColors = [0x74b9ff, 0xa29bfe, 0xffffff, 0xe17055];
+        const crystals = [
+            // Center cross
+            { x: -1, y: -6, size: 2 },
+            { x: -1, y: -4, size: 2 },
+            { x: -1, y: -2, size: 2 },
+            { x: -1, y: 0, size: 2 },
+            { x: -1, y: 2, size: 2 },
+            { x: -1, y: 4, size: 2 },
+            { x: -6, y: -1, size: 2 },
+            { x: -4, y: -1, size: 2 },
+            { x: -2, y: -1, size: 2 },
+            { x: 0, y: -1, size: 2 },
+            { x: 2, y: -1, size: 2 },
+            { x: 4, y: -1, size: 2 },
+            // Diagonal arms
+            { x: -3, y: -3, size: 2 },
+            { x: -5, y: -5, size: 2 },
+            { x: 1, y: -3, size: 2 },
+            { x: 3, y: -5, size: 2 },
+            { x: -3, y: 1, size: 2 },
+            { x: -5, y: 3, size: 2 },
+            { x: 1, y: 1, size: 2 },
+            { x: 3, y: 3, size: 2 }
+        ];
+        
+        crystals.forEach((crystal, index) => {
+            const colorIndex = Math.floor(Math.random() * iceColors.length);
+            effect.fillStyle(iceColors[colorIndex], 0.8);
+            effect.fillRect(crystal.x, crystal.y, crystal.size, crystal.size);
+        });
         
         // Animate the effect
         this.scene.tweens.add({
             targets: effect,
-            scale: 0.6,
+            scaleX: 1.2,
+            scaleY: 1.2,
             alpha: 0,
+            rotation: Math.PI / 4,
             duration: 800,
+            ease: 'Power2',
             onComplete: () => {
                 effect.destroy();
-                const index = this.freezeEffects.indexOf(effect);
-                if (index > -1) {
-                    this.freezeEffects.splice(index, 1);
-                }
             }
         });
-        
-        this.freezeEffects.push(effect);
     }
 
     public playExplosionEffect(x: number, y: number, delay: number = 0) {
-        // Create multiple flame sprites for explosion effect
-        const numFlames = 5;
-        const effects: Phaser.GameObjects.Sprite[] = [];
+        // Create multiple pixel-art explosion effects
+        const numExplosions = 5;
         
         this.scene.time.delayedCall(delay, () => {
-            for (let i = 0; i < numFlames; i++) {
-                const angle = (i / numFlames) * Math.PI * 2;
+            for (let i = 0; i < numExplosions; i++) {
+                const angle = (i / numExplosions) * Math.PI * 2;
                 const distance = 20 + Math.random() * 30;
                 const offsetX = Math.cos(angle) * distance;
                 const offsetY = Math.sin(angle) * distance;
                 
-                const effect = this.scene.add.sprite(x + offsetX, y + offsetY, 'flame')
-                    .setScale(0.3 + Math.random() * 0.4)
-                    .setAlpha(1)
-                    .setRotation(Math.random() * Math.PI * 2);
+                const effect = this.scene.add.graphics();
+                effect.setPosition(x + offsetX, y + offsetY);
+                
+                // Create explosion burst pixel pattern
+                const explosionColors = [0xff6b35, 0xff8e53, 0xffa726, 0xffcc02, 0xff3838];
+                const burstPixels = [
+                    // Center burst
+                    { x: -2, y: -2, size: 4 },
+                    { x: 0, y: -4, size: 2 },
+                    { x: -4, y: 0, size: 2 },
+                    { x: 4, y: 0, size: 2 },
+                    { x: 0, y: 4, size: 2 },
+                    // Scattered sparks
+                    { x: -6, y: -2, size: 2 },
+                    { x: 6, y: -2, size: 2 },
+                    { x: -2, y: -6, size: 2 },
+                    { x: -2, y: 6, size: 2 },
+                    { x: -4, y: -4, size: 2 },
+                    { x: 4, y: -4, size: 2 },
+                    { x: -4, y: 4, size: 2 },
+                    { x: 4, y: 4, size: 2 }
+                ];
+                
+                burstPixels.forEach((pixel, index) => {
+                    const colorIndex = Math.floor(Math.random() * explosionColors.length);
+                    effect.fillStyle(explosionColors[colorIndex], 1);
+                    effect.fillRect(pixel.x, pixel.y, pixel.size, pixel.size);
+                });
                 
                 // Animate the explosion effect
                 this.scene.tweens.add({
                     targets: effect,
-                    scale: effect.scale * 2,
+                    scaleX: 2 + Math.random(),
+                    scaleY: 2 + Math.random(),
                     alpha: 0,
-                    rotation: effect.rotation + (Math.random() - 0.5) * Math.PI,
+                    rotation: (Math.random() - 0.5) * Math.PI,
                     duration: 600 + Math.random() * 400,
                     ease: 'Power2',
                     onComplete: () => {
                         effect.destroy();
                     }
                 });
-                
-                effects.push(effect);
             }
         });
     }
@@ -114,10 +185,7 @@ export class EffectManager {
     }
 
     public destroy() {
-        // Clean up all effects
-        this.burnEffects.forEach(effect => effect.destroy());
-        this.freezeEffects.forEach(effect => effect.destroy());
-        this.burnEffects = [];
-        this.freezeEffects = [];
+        // Effects are automatically cleaned up when they complete their animations
+        // No manual cleanup needed since we're not tracking them in arrays
     }
 }
