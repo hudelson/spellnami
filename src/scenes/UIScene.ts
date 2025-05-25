@@ -34,6 +34,7 @@ export class UIScene extends Scene {
             } else {
                 this.topScores = [0, 0, 0]; // Default top scores
             }
+            console.log('Loaded top scores:', this.topScores);
         } catch (error) {
             console.warn('Failed to load top scores:', error);
             this.topScores = [0, 0, 0];
@@ -81,48 +82,15 @@ export class UIScene extends Scene {
             this.scoreAlreadyRecorded = true;
         }
         
-        // Show game over panel if it doesn't exist
-        if (!this.gameOverPanel) {
-            this.createGameOverPanel();
-        } else {
-            // Update the score in the existing panel
-            this.updateGameOverScore();
+        // Always destroy and recreate the panel to ensure fresh data
+        if (this.gameOverPanel) {
+            this.gameOverPanel.destroy();
         }
+        this.createGameOverPanel();
         this.gameOverPanel.setVisible(true);
     }
 
-    private updateGameOverScore() {
-        if (this.gameOverPanel) {
-            // Find the score text in the container and update it
-            const scoreText = this.gameOverPanel.list.find(child => 
-                child instanceof Phaser.GameObjects.Text && 
-                (child as Phaser.GameObjects.Text).text.includes('Score:')
-            ) as Phaser.GameObjects.Text;
-            
-            if (scoreText) {
-                scoreText.setText(`Final Score: ${this.score}`);
-            }
-            
-            // Update top scores display
-            const medals = ['🥇', '🥈', '🥉'];
-            const colors = ['#FFD700', '#C0C0C0', '#CD7F32'];
-            
-            // Find and update the top score elements (they should be after the title)
-            const topScoreElements = this.gameOverPanel.list.filter(child => 
-                child instanceof Phaser.GameObjects.Text && 
-                (child as Phaser.GameObjects.Text).text.match(/[🥇🥈🥉]/)
-            ) as Phaser.GameObjects.Text[];
-            
-            for (let i = 0; i < Math.min(3, topScoreElements.length); i++) {
-                const score = this.topScores[i] || 0;
-                const medal = medals[i];
-                const color = colors[i];
-                
-                topScoreElements[i].setText(`${medal} ${score}`);
-                topScoreElements[i].setColor(color);
-            }
-        }
-    }
+
 
     private restartGame() {
         // Hide game over panel
@@ -147,83 +115,213 @@ export class UIScene extends Scene {
         const x = this.cameras.main.width / 2;
         const y = this.cameras.main.height / 2;
 
-        // Create panel background
-        const panel = this.add.graphics()
-            .fillStyle(0x000000, 0.9)
-            .fillRoundedRect(-width / 2, -height / 2, width, height, 10)
-            .lineStyle(2, 0xffffff, 1)
-            .strokeRoundedRect(-width / 2, -height / 2, width, height, 10);
+        // Create pixel-art style panel background
+        const panel = this.add.graphics();
+        
+        // Main background - dark blue
+        panel.fillStyle(0x2c3e50, 1);
+        panel.fillRect(-width / 2, -height / 2, width, height);
+        
+        // Pixel-art style border - multiple layers for depth
+        // Outer border - bright cyan
+        panel.lineStyle(4, 0x00ffff, 1);
+        panel.strokeRect(-width / 2, -height / 2, width, height);
+        
+        // Inner border - darker blue
+        panel.lineStyle(2, 0x3498db, 1);
+        panel.strokeRect(-width / 2 + 6, -height / 2 + 6, width - 12, height - 12);
+        
+        // Corner highlights - pixel-art style
+        panel.fillStyle(0x5dade2, 1);
+        // Top-left corner
+        panel.fillRect(-width / 2, -height / 2, 12, 4);
+        panel.fillRect(-width / 2, -height / 2, 4, 12);
+        // Top-right corner
+        panel.fillRect(width / 2 - 12, -height / 2, 12, 4);
+        panel.fillRect(width / 2 - 4, -height / 2, 4, 12);
+        // Bottom-left corner
+        panel.fillRect(-width / 2, height / 2 - 4, 12, 4);
+        panel.fillRect(-width / 2, height / 2 - 12, 4, 12);
+        // Bottom-right corner
+        panel.fillRect(width / 2 - 12, height / 2 - 4, 12, 4);
+        panel.fillRect(width / 2 - 4, height / 2 - 12, 4, 12);
 
-        // Add game over text
+        // Add pixel-art style game over text with shadow
+        const gameOverShadow = this.add.text(2, -158, 'GAME OVER', {
+            fontSize: '36px',
+            color: '#000000',
+            fontFamily: 'monospace',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+
         const gameOverText = this.add.text(0, -160, 'GAME OVER', {
             fontSize: '36px',
             color: '#ff3333',
-            fontStyle: 'bold'
+            fontFamily: 'monospace',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
         }).setOrigin(0.5);
 
-        // Add score text
+        // Add pixel-art style score text with shadow
+        const scoreShadow = this.add.text(2, -108, `Final Score: ${this.score}`, {
+            fontSize: '24px',
+            color: '#000000',
+            fontFamily: 'monospace'
+        }).setOrigin(0.5);
+
         const finalScoreText = this.add.text(0, -110, `Final Score: ${this.score}`, {
             fontSize: '24px',
-            color: '#fff'
+            color: '#ffff00',
+            fontFamily: 'monospace',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 1
         }).setOrigin(0.5);
 
-        // Add top scores section
+        // Add pixel-art style top scores section
+        const topScoresShadow = this.add.text(2, -68, 'TOP SCORES', {
+            fontSize: '20px',
+            color: '#000000',
+            fontFamily: 'monospace'
+        }).setOrigin(0.5);
+
         const topScoresTitle = this.add.text(0, -70, 'TOP SCORES', {
             fontSize: '20px',
             color: '#00ffff',
-            fontStyle: 'bold'
+            fontFamily: 'monospace',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 1
         }).setOrigin(0.5);
 
-        // Create top scores list
+        // Create pixel-art style top scores list with trophy icons
         const topScoreElements: Phaser.GameObjects.Text[] = [];
+        const topScoreShadows: Phaser.GameObjects.Text[] = [];
         const medals = ['🥇', '🥈', '🥉'];
         const colors = ['#FFD700', '#C0C0C0', '#CD7F32']; // Gold, Silver, Bronze
+        
+        console.log('Creating game over panel with top scores:', this.topScores);
         
         for (let i = 0; i < 3; i++) {
             const score = this.topScores[i] || 0;
             const medal = medals[i];
             const color = colors[i];
             
-            const scoreText = this.add.text(0, -40 + (i * 25), `${medal} ${score}`, {
+            // Increased spacing to 40 pixels to prevent overlap
+            const scoreShadow = this.add.text(2, -20 + (i * 40), `${medal} ${score}`, {
                 fontSize: '18px',
-                color: color,
-                fontStyle: 'bold'
+                color: '#000000',
+                fontFamily: 'monospace'
             }).setOrigin(0.5);
             
+            const scoreText = this.add.text(0, -22 + (i * 40), `${medal} ${score}`, {
+                fontSize: '18px',
+                color: color,
+                fontFamily: 'monospace',
+                fontStyle: 'bold',
+                stroke: '#000000',
+                strokeThickness: 1
+            }).setOrigin(0.5);
+            
+            topScoreShadows.push(scoreShadow);
             topScoreElements.push(scoreText);
         }
 
-        // Add restart button
-        const restartButton = this.add.rectangle(0, 120, 150, 50, 0x4CAF50)
+        // Create pixel-art style restart button (moved down to avoid overlap)
+        const buttonBg = this.add.graphics();
+        
+        // Button background - green with pixel-art styling
+        buttonBg.fillStyle(0x4CAF50, 1);
+        buttonBg.fillRect(-75, 140, 150, 50);
+        
+        // Button highlights - pixel-art style
+        buttonBg.fillStyle(0x66BB6A, 1);
+        buttonBg.fillRect(-75, 140, 150, 4); // Top highlight
+        buttonBg.fillRect(-75, 140, 4, 50); // Left highlight
+        
+        // Button shadows
+        buttonBg.fillStyle(0x388E3C, 1);
+        buttonBg.fillRect(-75, 186, 150, 4); // Bottom shadow
+        buttonBg.fillRect(71, 140, 4, 50); // Right shadow
+        
+        // Button border
+        buttonBg.lineStyle(2, 0x2E7D32, 1);
+        buttonBg.strokeRect(-75, 140, 150, 50);
+
+        // Make button interactive
+        const buttonHitArea = this.add.rectangle(0, 165, 150, 50, 0x000000, 0)
             .setInteractive()
             .on('pointerdown', () => {
-                // Properly reset and restart the game
                 this.restartGame();
             });
 
-        const buttonText = this.add.text(0, 120, 'Play Again', {
+        const buttonShadow = this.add.text(2, 167, 'PLAY AGAIN', {
             fontSize: '20px',
-            color: '#fff',
-            fontStyle: 'bold'
+            color: '#000000',
+            fontFamily: 'monospace'
         }).setOrigin(0.5);
 
-        // Button hover effects
-        restartButton.on('pointerover', () => {
-            restartButton.setFillStyle(0x45a049);
+        const buttonText = this.add.text(0, 165, 'PLAY AGAIN', {
+            fontSize: '20px',
+            color: '#ffffff',
+            fontFamily: 'monospace',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 1
+        }).setOrigin(0.5);
+
+        // Button hover effects - pixel-art style
+        buttonHitArea.on('pointerover', () => {
+            buttonBg.clear();
+            // Brighter green on hover
+            buttonBg.fillStyle(0x66BB6A, 1);
+            buttonBg.fillRect(-75, 140, 150, 50);
+            
+            buttonBg.fillStyle(0x81C784, 1);
+            buttonBg.fillRect(-75, 140, 150, 4);
+            buttonBg.fillRect(-75, 140, 4, 50);
+            
+            buttonBg.fillStyle(0x4CAF50, 1);
+            buttonBg.fillRect(-75, 186, 150, 4);
+            buttonBg.fillRect(71, 140, 4, 50);
+            
+            buttonBg.lineStyle(2, 0x2E7D32, 1);
+            buttonBg.strokeRect(-75, 140, 150, 50);
         });
 
-        restartButton.on('pointerout', () => {
-            restartButton.setFillStyle(0x4CAF50);
+        buttonHitArea.on('pointerout', () => {
+            buttonBg.clear();
+            // Original green
+            buttonBg.fillStyle(0x4CAF50, 1);
+            buttonBg.fillRect(-75, 140, 150, 50);
+            
+            buttonBg.fillStyle(0x66BB6A, 1);
+            buttonBg.fillRect(-75, 140, 150, 4);
+            buttonBg.fillRect(-75, 140, 4, 50);
+            
+            buttonBg.fillStyle(0x388E3C, 1);
+            buttonBg.fillRect(-75, 186, 150, 4);
+            buttonBg.fillRect(71, 140, 4, 50);
+            
+            buttonBg.lineStyle(2, 0x2E7D32, 1);
+            buttonBg.strokeRect(-75, 140, 150, 50);
         });
 
         // Create container for the panel
         this.gameOverPanel = this.add.container(x, y, [
             panel,
+            gameOverShadow,
             gameOverText,
+            scoreShadow,
             finalScoreText,
+            topScoresShadow,
             topScoresTitle,
+            ...topScoreShadows,
             ...topScoreElements,
-            restartButton,
+            buttonBg,
+            buttonHitArea,
+            buttonShadow,
             buttonText
         ]).setDepth(1000).setVisible(false);
     }
@@ -231,6 +329,9 @@ export class UIScene extends Scene {
     create(data: { difficulty: string; settings: any }) {
         // Reset score recording flag for new game
         this.scoreAlreadyRecorded = false;
+        
+        // Load top scores from localStorage
+        this.loadTopScores();
         
         // Get difficulty from scene data or registry
         if (data && data.difficulty) {

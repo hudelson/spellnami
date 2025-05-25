@@ -295,8 +295,12 @@ export class GameScene extends Scene {
         // Clear the current word
         this.currentWord = null;
         
-        // Spawn next word immediately (no delay)
-        this.spawnNextWord();
+        // Add a small delay before spawning the next word to let player see what happened
+        this.time.delayedCall(800, () => {
+            if (!this.isGameOver) {
+                this.spawnNextWord();
+            }
+        });
     }
 
     private freezeBlock(block: BlockBody) {
@@ -543,6 +547,11 @@ export class GameScene extends Scene {
                 this.time.removeAllEvents();
             }
             
+            // Stop all existing tweens to prevent conflicts during explosion
+            if (this.tweens) {
+                this.tweens.killAll();
+            }
+            
             // Create dramatic explosion effect for all remaining blocks
             this.explodeAllBlocks();
             
@@ -602,22 +611,41 @@ export class GameScene extends Scene {
             this.time.delayedCall(explosionDelay, () => {
                 // Check if container is still valid before animating
                 if (blockData.container && blockData.container.active && blockData.container.scene) {
-                    this.tweens.add({
-                        targets: blockData.container,
-                        alpha: 0,
-                        scaleX: 2,
-                        scaleY: 2,
-                        rotation: (Math.random() - 0.5) * Math.PI,
-                        duration: 800,
-                        ease: 'Power2',
-                        onComplete: () => {
-                            // Destroy the block after animation, with safety check
-                            if (blockData.body && this.physicsManager) {
-                                this.physicsManager.destroyBody(blockData.body);
-                            }
-                        },
-                        onCompleteScope: this
-                    });
+                    // First, immediately detach the physics body from the container to prevent conflicts
+                    if (blockData.body && blockData.container.body) {
+                        blockData.container.body = null;
+                    }
+                    
+                    // Destroy the physics body immediately to prevent tween conflicts
+                    if (blockData.body && this.physicsManager) {
+                        this.physicsManager.destroyBody(blockData.body);
+                    }
+                    
+                    // Now safely animate just the visual container
+                    // Additional safety check before creating tween
+                    if (blockData.container && blockData.container.active && blockData.container.scene && this.tweens) {
+                        this.tweens.add({
+                            targets: blockData.container,
+                            alpha: 0,
+                            scaleX: 2,
+                            scaleY: 2,
+                            rotation: (Math.random() - 0.5) * Math.PI,
+                            duration: 53,
+                            ease: 'Power2',
+                            onComplete: () => {
+                                // Destroy the visual container after animation
+                                if (blockData.container && blockData.container.active) {
+                                    blockData.container.destroy();
+                                }
+                            },
+                            onCompleteScope: this
+                        });
+                    } else {
+                        // If we can't animate, just destroy the container immediately
+                        if (blockData.container && blockData.container.active) {
+                            blockData.container.destroy();
+                        }
+                    }
                 } else {
                     // If container is already destroyed, just clean up the physics body
                     if (blockData.body && this.physicsManager) {
@@ -626,8 +654,8 @@ export class GameScene extends Scene {
                 }
             });
             
-            // Stagger the explosions for dramatic effect
-            explosionDelay += 100 + Math.random() * 200;
+            // Stagger the explosions for dramatic effect (15x faster - 3x faster than current)
+            explosionDelay += 7 + Math.random() * 13;
         });
         
         console.log(`Exploding ${blocksToExplode.length} blocks`);
