@@ -4,6 +4,7 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 import svgr from 'vite-plugin-svgr';
 
 export default defineConfig({
+  base: process.env.NODE_ENV === 'production' ? '/spellnami/' : '/',
   plugins: [
     svgr({
       svgrOptions: {
