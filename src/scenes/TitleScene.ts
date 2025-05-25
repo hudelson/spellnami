@@ -87,10 +87,10 @@ export class TitleScene extends Scene {
         // Add title with shadow effect
         const title = this.add.text(
             this.cameras.main.width / 2,
-            this.cameras.main.height / 3,
+            this.cameras.main.height * 0.25,  // Moved up slightly (was / 3)
             'SPELLNAMI',
             {
-                fontSize: '64px',
+                fontSize: '72px',
                 color: '#fff',
                 fontStyle: 'bold',
                 stroke: '#000',
@@ -110,12 +110,12 @@ export class TitleScene extends Scene {
         });
 
         // Add subtitle with more space from the title
-        this.add.text(
+        const subtitle = this.add.text(
             this.cameras.main.width / 2,
-            title.y + 90,  // Increased from 70 to 90 for more space
+            title.y + 100,  // Increased space from title
             'Select Difficulty',
             {
-                fontSize: '24px',
+                fontSize: '28px',
                 color: '#fff',
                 fontStyle: 'bold',
                 stroke: '#000',
@@ -123,15 +123,34 @@ export class TitleScene extends Scene {
             }
         ).setOrigin(0.5);
 
+        // Calculate button positions based on screen size
+        const buttonSpacing = 100;  // Space between buttons
+        const buttonYStart = subtitle.y + 80;  // Start buttons below subtitle with some space
+        
         // Difficulty levels with different colors and positions
         const difficulties = [
-            { text: 'Apprentice', key: 'apprentice', color: 0x4CAF50, hoverColor: 0x45a049, y: 0 },
-            { text: 'Scholar', key: 'scholar', color: 0xFF9800, hoverColor: 0xe68a00, y: 80 },  // Increased from 70 to 80
-            { text: 'Master', key: 'master', color: 0xF44336, hoverColor: 0xda190b, y: 160 }   // Increased from 140 to 160
+            { 
+                text: 'Apprentice', 
+                key: 'apprentice', 
+                color: 0x4CAF50, 
+                hoverColor: 0x45a049, 
+                y: 0 
+            },
+            { 
+                text: 'Scholar', 
+                key: 'scholar', 
+                color: 0xFF9800, 
+                hoverColor: 0xe68a00, 
+                y: buttonSpacing 
+            },
+            { 
+                text: 'Master', 
+                key: 'master', 
+                color: 0xF44336, 
+                hoverColor: 0xda190b, 
+                y: buttonSpacing * 2 
+            }
         ];
-
-        // Create buttons
-        const buttonYStart = this.cameras.main.height / 2 - 30;
         
         difficulties.forEach((difficulty) => {
             const button = new Button({

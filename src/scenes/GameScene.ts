@@ -5,13 +5,30 @@ import { PhysicsManager } from '../systems/PhysicsManager';
 import { EffectManager } from '../systems/EffectManager';
 import { UIScene } from './UIScene';
 
+// Extend MatterJS.BodyType to include our custom properties
+type BlockBody = MatterJS.BodyType & {
+    gameObject?: Phaser.GameObjects.GameObject;
+    label?: string;
+};
+
+declare global {
+    // Extend the Matter namespace to include our custom properties
+    namespace MatterJS {
+        interface Body {
+            gameObject?: Phaser.GameObjects.GameObject;
+            label?: string;
+        }
+    }
+}
+
 export class GameScene extends Scene {
     private wordManager!: WordManager;
     private physicsManager!: PhysicsManager;
     private effectManager!: EffectManager;
     private uiScene!: UIScene;
     private isGameOver: boolean = false;
-    private currentWord: { text: string; blocks: MatterJS.BodyType[] } | null = null;
+    // Define the current word with our block type
+    private currentWord: { text: string; blocks: BlockBody[] } | null = null;
 
     constructor() {
         super('GameScene');
@@ -32,52 +49,37 @@ export class GameScene extends Scene {
         this.wordManager = new WordManager(
             this,
             this.physicsManager,
-            this.effectManager,
             difficultySettings
         );
         
+        // Initialize effect manager
+        this.effectManager = new EffectManager(this);
+        
         console.log('Game started with difficulty:', data.difficulty || 'default');
 
-        // Enable Matter.js physics
-        this.matter.world.setGravity(0, 1);
-        
         // Set up world bounds with collision events
-        // The bounds are created as Matter.js bodies
-        // We don't need to store the return value as the bounds are automatically added to the world
-        this.matter.world.setBounds(
-            0,
-            0,
-            this.cameras.main.width,
-            this.cameras.main.height,
-            32, // Thickness
-            true, // left
-            true, // right
-            false, // top
-            true   // bottom
-        );
+        const { width, height } = this.cameras.main;
         
-        // Get all bodies and find the bounds
-        const matterWorld = (this.matter as any).world.engine.world;
-        const bodies = Matter.Composite.allBodies(matterWorld);
+        // Create bounds using Phaser's Matter API
+        this.matter.world.setBounds(0, 0, width, height, 32, true, true, true, true);
         
-        for (const body of bodies) {
-            const bound = body as Matter.Body & { label?: string };
-            if (bound.label?.includes('left')) {
-                bound.label = 'Bounds Left';
-            } else if (bound.label?.includes('right')) {
-                bound.label = 'Bounds Right';
-            } else if (bound.label?.includes('bottom')) {
-                bound.label = 'Bounds Bottom';
-            }
+        // Label the bounds for collision detection
+        const boundsBodies = this.matter.world.walls as MatterJS.BodyType[];
+        if (boundsBodies && boundsBodies.length >= 4) {
+            // Top, Right, Bottom, Left - Phaser's internal order
+            boundsBodies[0].label = 'Bounds Top';
+            boundsBodies[1].label = 'Bounds Right';
+            boundsBodies[2].label = 'Bounds Bottom';
+            boundsBodies[3].label = 'Bounds Left';
         }
-
+        
         console.log('Physics world initialized with bounds');
 
         // Set up keyboard input
         this.input.keyboard?.on('keydown', (event: KeyboardEvent) => this.handleKeyPress(event));
 
         // Listen for collision events
-        this.matter.world.on('collisionstart', (event: any) => {
+        this.matter.world.on('collisionstart', (event: Phaser.Physics.Matter.Events.CollisionActiveEvent) => {
             this.handleCollisions(event);
         });
         
@@ -175,10 +177,14 @@ export class GameScene extends Scene {
         // Convert remaining blocks to static and change their appearance
         this.currentWord.blocks.forEach(block => {
             if (block) {
-                this.matter.body.setStatic(block, true);
+                // Use the physics manager to convert the block to static
+                // Cast to Matter.Body to match the expected parameter type
+                this.physicsManager.convertToStatic(block as Matter.Body);
                 const sprite = block.gameObject as Phaser.Physics.Matter.Sprite;
-                sprite.setTint(0xadd8e6); // Light blue tint for static blocks
-                this.effectManager.playFreezeEffect(block.position.x, block.position.y);
+                if (sprite) {
+                    sprite.setTint(0xadd8e6); // Light blue tint for static blocks
+                    this.effectManager.playFreezeEffect(block.position.x, block.position.y);
+                }
             }
         });
         
@@ -189,39 +195,73 @@ export class GameScene extends Scene {
         this.scheduleNextWord();
     }
 
-    private handleCollisions(event: any) {
-        if (this.isGameOver) return;
-        
-        const pairs = event.pairs;
-        
-        for (let i = 0; i < pairs.length; i++) {
-            const bodyA = pairs[i].bodyA;
-            const bodyB = pairs[i].bodyB;
+    /**
+     * Handles collision events between physics bodies
+     * @param event The collision event
+     */
+    private handleCollisions(event: Phaser.Physics.Matter.Events.CollisionActiveEvent) {
+        try {
+            if (this.isGameOver || !event || !event.pairs || event.pairs.length === 0) {
+                return;
+            }
             
-            // Check if any block hit the bottom
-            if (this.isBottomCollision(bodyA, bodyB) || this.isBottomCollision(bodyB, bodyA)) {
-                if (this.currentWord && this.currentWord.blocks.includes(bodyA)) {
-                    // Word hit the bottom, convert to static
-                    this.handleWrongKey();
-                } else if (this.currentWord && this.currentWord.blocks.includes(bodyB)) {
-                    // Word hit the bottom, convert to static
-                    this.handleWrongKey();
+            for (const pair of event.pairs) {
+                if (!pair.bodyA || !pair.bodyB) {
+                    continue; // Skip if either body is missing
+                }
+                
+                // Type the colliding bodies
+                const bodyA = pair.bodyA as BlockBody;
+                const bodyB = pair.bodyB as BlockBody;
+                
+                // Skip if either body is missing required properties
+                if (!bodyA || !bodyB) {
+                    continue;
+                }
+                
+                // Check for bottom collisions
+                const isBodyABottomCollision = this.isBottomCollision(bodyA, bodyB);
+                const isBodyBBottomCollision = this.isBottomCollision(bodyB, bodyA);
+                
+                if (isBodyABottomCollision || isBodyBBottomCollision) {
+                    if (this.currentWord && this.currentWord.blocks) {
+                        const isBodyAInCurrentWord = this.currentWord.blocks.some(block => block === bodyA);
+                        const isBodyBInCurrentWord = this.currentWord.blocks.some(block => block === bodyB);
+                        
+                        if (isBodyAInCurrentWord || isBodyBInCurrentWord) {
+                            // Word hit the bottom, convert to static
+                            this.handleWrongKey();
+                            break; // Exit after handling the collision
+                        }
+                    }
+                }
+                
+                // Check if any block is too high (game over)
+                if (this.isGameOver) {
+                    break;
+                }
+                
+                const highestBlock = this.physicsManager.findHighestBlock();
+                if (highestBlock?.position?.y !== undefined && highestBlock.position.y <= 32) {
+                    this.gameOver();
+                    break;
                 }
             }
-            
-            // Check if any block is too high (game over)
-            if (this.isGameOver) break;
-            
-            const highestBlock = this.physicsManager.findHighestBlock();
-            if (highestBlock && highestBlock.position.y <= 32) {
-                this.gameOver();
-                break;
-            }
+        } catch (error) {
+            console.error('Error in handleCollisions:', error);
         }
     }
 
-    private isBottomCollision(bodyA: MatterJS.BodyType, bodyB: MatterJS.BodyType): boolean {
-        return bodyA.label === 'Bounds Bottom' && bodyB.gameObject !== undefined;
+    private isBottomCollision(bodyA: BlockBody, bodyB: BlockBody): boolean {
+        // Check if bodyA is the bottom bounds and bodyB is a block with a game object
+        if (bodyA.label === 'Bounds Bottom' && bodyB.gameObject) {
+            return true;
+        }
+        // Also check the reverse case where bodyB is the bottom bounds
+        if (bodyB.label === 'Bounds Bottom' && bodyA.gameObject) {
+            return true;
+        }
+        return false;
     }
 
     private gameOver() {
@@ -252,32 +292,44 @@ export class GameScene extends Scene {
         }
     }
 
+    /**
+     * Called every frame, used for game logic updates
+     */
     update() {
-        if (this.isGameOver) return;
-        
-        // Check for game over condition (block too high)
-        const highestBlock = this.physicsManager.findHighestBlock();
-        
-        // Only check for game over if we have a valid block
-        if (highestBlock && highestBlock.position) {
-            const gameOverY = 100; // Increased from 32 to be more lenient
-            const isBlockTooHigh = highestBlock.position.y <= gameOverY;
-            
-            console.log('Highest block check:', {
-                blockId: highestBlock.id,
-                blockY: highestBlock.position.y,
-                gameOverY,
-                isBlockTooHigh,
-                isStatic: highestBlock.isStatic,
-                hasGameObject: !!highestBlock.gameObject,
-                blockLabel: highestBlock.label
-            });
-            
-            if (isBlockTooHigh) {
-                console.log('GAME OVER - Block reached the top of the screen');
-                this.gameOver();
+        try {
+            if (this.isGameOver || !this.physicsManager) {
                 return;
             }
+            
+            // Check for game over condition (block too high)
+            const highestBlock = this.physicsManager.findHighestBlock();
+            
+            // Only check for game over if we have a valid block with a position
+            if (highestBlock?.position?.y !== undefined) {
+                const gameOverY = 50; // Y-coordinate threshold for game over
+                const currentY = highestBlock.position.y;
+                const isBlockTooHigh = currentY <= gameOverY;
+                
+                // Only log every 60 frames to reduce console spam
+                if (this.game?.loop?.frame % 60 === 0) {
+                    console.log('Highest block check:', {
+                        blockId: highestBlock.id,
+                        blockY: currentY.toFixed(2),
+                        gameOverY,
+                        isBlockTooHigh,
+                        isStatic: highestBlock.isStatic,
+                        hasGameObject: !!highestBlock.gameObject,
+                        blockLabel: highestBlock.label || 'no-label'
+                    });
+                }
+                
+                if (isBlockTooHigh) {
+                    console.log('GAME OVER - Block reached the top of the screen at y:', currentY.toFixed(2));
+                    this.gameOver();
+                }
+            }
+        } catch (error) {
+            console.error('Error in update loop:', error);
         }
         
         // If we have no current word, spawn a new one

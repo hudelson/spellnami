@@ -46,16 +46,29 @@ export class WordManager {
             'zucchini', 'adventure', 'butterfly', 'chocolate', 'dinosaur', 'eleven', 'friendly', 'grandma', 'homework', 'jump', 'kite'
         ];
 
-        // Filter words based on difficulty
-        this.wordList = allWords.filter(
-            word => word.length >= this.difficulty.minLength && 
-                   word.length <= this.difficulty.maxLength
-        );
+        // Filter words based on difficulty and log the filtering criteria
+        const minLen = Math.max(3, this.difficulty.minLength); // Ensure minimum length is at least 3
+        const maxLen = Math.min(10, this.difficulty.maxLength); // Ensure maximum length is at most 10
         
-        // If no words match the difficulty, use a default set
+        console.log(`Filtering words for difficulty: ${minLen}-${maxLen} letters`);
+        
+        this.wordList = allWords.filter(word => {
+            const len = word.length;
+            return len >= minLen && len <= maxLen;
+        });
+        
+        // If no words match the difficulty, use a default set that matches the criteria
         if (this.wordList.length === 0) {
-            console.warn('No words matched the difficulty settings. Using default word list.');
-            this.wordList = ['code', 'game', 'type', 'fast', 'slow', 'word', 'play', 'jump', 'fall', 'moon'];
+            console.warn(`No words matched the difficulty settings (${minLen}-${maxLen} letters). Using default word list.`);
+            this.wordList = allWords.filter(word => 
+                word.length >= minLen && word.length <= maxLen
+            );
+            
+            // If still no words, use a fallback list
+            if (this.wordList.length === 0) {
+                this.wordList = ['code', 'game', 'type', 'fast', 'slow', 'word', 'play', 'jump', 'fall', 'moon']
+                    .filter(word => word.length >= minLen && word.length <= maxLen);
+            }
         }
     }
 
@@ -64,9 +77,9 @@ export class WordManager {
         const word = this.wordList[Math.floor(Math.random() * this.wordList.length)];
         console.log('Creating word:', word);
         
-        // Calculate starting position (random x, just above the top of the screen)
+        // Calculate starting position (random x, start below the visible area)
         const startX = 100 + Math.random() * (this.scene.cameras.main.width - 200);
-        const startY = 100; // Start lower on the screen
+        const startY = 200; // Start much lower on the screen to prevent instant game over
         
         // Create blocks for each letter
         const blocks: BlockBody[] = [];
