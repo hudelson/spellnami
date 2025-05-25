@@ -9,6 +9,7 @@ import { UIScene } from './UIScene';
 type BlockBody = MatterJS.BodyType & {
     gameObject?: Phaser.GameObjects.GameObject;
     label?: string;
+    body?: MatterJS.BodyType;
 };
 
 declare global {
@@ -17,6 +18,7 @@ declare global {
         interface Body {
             gameObject?: Phaser.GameObjects.GameObject;
             label?: string;
+            body?: MatterJS.BodyType;
         }
     }
 }
@@ -60,8 +62,139 @@ export class GameScene extends Scene {
         // Set up world bounds with collision events
         const { width, height } = this.cameras.main;
         
-        // Create bounds using Phaser's Matter API
-        this.matter.world.setBounds(0, 0, width, height, 32, true, true, true, true);
+        // Configure physics world with proper gravity settings
+        this.matter.world.setGravity(0, 1);
+        
+        // Set up camera
+        this.cameras.main.setBackgroundColor('#1a1a2e');
+        this.cameras.main.setZoom(1);
+        this.cameras.main.centerOn(width / 2, height / 2);
+        
+        // Create bounds using Phaser's Matter API with thicker walls
+        const wallThickness = 32;
+        this.matter.world.setBounds(0, 0, width, height, wallThickness, true, true, true, true);
+        
+        // Enable Matter.js debug rendering with custom colors
+        this.matter.world.drawDebug = true;
+        this.matter.world.debugGraphic.setDepth(100);
+        
+        // Customize debug colors
+        const debugConfig = {
+            showBody: true,
+            showStaticBody: true,
+            showVelocity: true,
+            showCollisions: true,
+            showAxes: true,
+            showPositions: true,
+            showAngleIndicator: true,
+            angleColor: 0xe81153,
+            staticFillStyle: '#ffffff',
+            staticLineThickness: 1,
+            fillColor: 0x106909,
+            fillOpacity: 0.5,
+            lineColor: 0xff00ff,
+            lineThickness: 2,
+            render: {
+                visible: true,
+                opacity: 1,
+                fillStyle: '#ff0000',
+                strokeStyle: '#0000ff',
+                lineWidth: 2
+            }
+        };
+        
+        // Apply debug config
+        Object.assign(this.matter.world.debugConfig, debugConfig);
+        
+        // Force debug rendering to update
+        this.matter.world.debugGraphic.clear();
+        this.matter.world.drawDebug = true;
+        
+        // Get the Matter.js engine instance
+        const engine = this.matter.world.engine;
+        
+        // Debug: Draw a border around the game area
+        const border = this.add.graphics();
+        border.lineStyle(4, 0x00ff00, 1);
+        border.strokeRect(wallThickness, wallThickness, width - wallThickness * 2, height - wallThickness * 2);
+        border.setDepth(1000);
+        
+        // Add a grid for better visibility
+        const grid = this.add.graphics();
+        grid.lineStyle(1, 0x333333, 0.5);
+        for (let y = 0; y < height; y += 40) {
+            grid.moveTo(0, y);
+            grid.lineTo(width, y);
+        }
+        for (let x = 0; x < width; x += 40) {
+            grid.moveTo(x, 0);
+            grid.lineTo(x, height);
+        }
+        grid.strokePath();
+        
+        // Add a test block to verify rendering
+        const testBlock = this.add.rectangle(width / 2, height / 2, 80, 40, 0xff0000);
+        testBlock.setDepth(1000);
+        
+        // Add test text
+        const testText = this.add.text(width / 2, height / 2 - 50, 'Spellnami', {
+            fontSize: '32px',
+            color: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5);
+        testText.setDepth(1000);
+        
+        // Configure physics timing and engine settings
+        engine.timing.timeScale = 1.0;
+        engine.enableSleeping = false; // Disable sleeping to prevent bodies from stopping
+        
+        // Enable continuous updates for physics
+        this.matter.world.autoUpdate = true;
+        
+        // Debug logging for physics world
+        console.log('Physics world configured with settings:', {
+            autoUpdate: this.matter.world.autoUpdate,
+            gravity: { x: 0, y: 1 },
+            bounds: { width, height },
+            engine: {
+                timing: engine.timing,
+                enableSleeping: engine.enableSleeping
+            }
+        });
+        
+        // Debug: Log when physics world updates
+        this.matter.world.on('beforeupdate', () => {
+            if (this.game.loop.frame % 60 === 0) {
+                const bodies = this.matter.world.getAllBodies();
+                console.log(`Physics update - Bodies: ${bodies.length}`);
+                bodies.forEach((body, index) => {
+                    if (index < 3) { // Only log first few bodies to avoid spam
+                        console.log(`Body ${index}:`, {
+                            id: body.id,
+                            position: body.position,
+                            velocity: body.velocity,
+                            isStatic: body.isStatic,
+                            label: body.label
+                        });
+                    }
+                });
+            }
+        });
+        
+        // Add a debug key to manually trigger physics updates
+        this.input.keyboard?.on('keydown-D', () => {
+            const bodies = this.matter.world.getAllBodies();
+            console.log('=== DEBUG PHYSICS STATE ===');
+            console.log('Total bodies:', bodies.length);
+            bodies.forEach((body, index) => {
+                console.log(`Body ${index} (${body.label || 'no-label'})`, {
+                    id: body.id,
+                    position: body.position,
+                    velocity: body.velocity,
+                    isStatic: body.isStatic
+                });
+            });
+        });
         
         // Label the bounds for collision detection
         const boundsBodies = this.matter.world.walls as MatterJS.BodyType[];

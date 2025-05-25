@@ -13,9 +13,13 @@ const config: Phaser.Types.Core.GameConfig = {
     physics: {
         default: 'matter',
         matter: {
-            gravity: { y: 0.5 },
-            debug: false,
-            enableSleeping: true
+            gravity: { x: 0, y: 1.0 },
+            debug: {
+                showBody: true,
+                showStaticBody: true,
+                showVelocity: true
+            },
+            enableSleeping: false
         }
     },
     scene: [BootScene, TitleScene, GameScene, UIScene],

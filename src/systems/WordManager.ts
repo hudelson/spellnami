@@ -77,9 +77,9 @@ export class WordManager {
         const word = this.wordList[Math.floor(Math.random() * this.wordList.length)];
         console.log('Creating word:', word);
         
-        // Calculate starting position (random x, start below the visible area)
-        const startX = 100 + Math.random() * (this.scene.cameras.main.width - 200);
-        const startY = 200; // Start much lower on the screen to prevent instant game over
+        // Calculate starting position (centered horizontally, above the visible area)
+        const startX = this.scene.cameras.main.width / 2 - (word.length * 20) / 2;
+        const startY = -100; // Start above the visible area
         
         // Create blocks for each letter
         const blocks: BlockBody[] = [];
@@ -87,39 +87,66 @@ export class WordManager {
         
         for (let i = 0; i < word.length; i++) {
             const isFirst = i === 0;
+            // Create the block with physics properties
             const block = this.physicsManager.createBlock(
-                startX + (i * 45), // Position blocks horizontally
-                startY - (i * 5),   // Slight vertical offset for each block
+                startX + (i * 40), // Position blocks horizontally with some spacing
+                startY + (i * 5),   // Slight vertical offset for each block
                 word[i],
                 isFirst
             );
             
-            // Add a small initial velocity to make the word fall naturally
-            // Use Phaser's Matter Physics API to set velocity
-            const velocity = { 
-                x: (Math.random() - 0.5) * 2, // Slight horizontal movement
-                y: this.difficulty.speed / 30  // Reduced initial speed
-            };
-            // Set velocity directly on the block's body
-            if (block && block.velocity) {
-                block.velocity.x = velocity.x;
-                block.velocity.y = velocity.y;
+            if (!block) {
+                console.error('Failed to create block for letter:', word[i]);
+                return null;
             }
+            
+            // Debug log the block before setting velocity
+            console.log('Block before velocity:', block);
+            
+            // Set initial velocity to make the word fall naturally
+            const velocity = { 
+                x: (Math.random() - 0.5) * 1, // Very slight horizontal movement
+                y: this.difficulty.speed / 10  // Initial falling speed
+            };
+            
+            try {
+                // Set velocity directly on the block (which is the Matter.js body)
+                if (block) {
+                    this.scene.matter.body.setVelocity(block, {
+                        x: velocity.x,
+                        y: velocity.y
+                    });
+                    
+                    // Debug log for the created block
+                    console.log(`Created block at (${block.position.x.toFixed(1)}, ${block.position.y.toFixed(1)}) ` +
+                              `with velocity (${velocity.x.toFixed(2)}, ${velocity.y.toFixed(2)})`);
+                } else {
+                    console.error('Block is undefined');
+                }
+            } catch (error) {
+                console.error('Error setting block velocity:', error);
+            }
+            
+            // Add the block to our blocks array
+            blocks.push(block);
             
             // Connect blocks with constraints if not the first block
             if (previousBlock) {
                 this.physicsManager.createConstraint(previousBlock, block);
             }
             
-            blocks.push(block);
+            // Update the previous block reference
             previousBlock = block;
             
-            // Highlight the first letter
-            if (isFirst) {
-                const sprite = block.gameObject;
-                if (sprite && 'setTint' in sprite) {
-                    (sprite as any).setTint(0xffff00); // Yellow tint for the first letter
-                    console.log('First block created at y:', startY);
+            // Highlight the first letter if this is the first block
+            if (isFirst && block) {
+                const container = (block as any).gameObject as Phaser.GameObjects.Container;
+                if (container && container.list) {
+                    // The text is the second child in the container (index 1)
+                    const text = container.list[1] as Phaser.GameObjects.Text;
+                    if (text && text.setStyle) {
+                        text.setStyle({ color: '#ff0' });
+                    }
                 }
             }
         }

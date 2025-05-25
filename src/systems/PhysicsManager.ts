@@ -15,6 +15,7 @@ type MatterBodyWithGameObject = Matter.Body & {
 export class PhysicsManager {
     private scene: Phaser.Scene;
     private staticBodies: Set<MatterBodyWithGameObject> = new Set();
+    private constraints: MatterJS.ConstraintType[] = [];
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
@@ -113,31 +114,119 @@ export class PhysicsManager {
      * @param isFirst Whether this is the first block in a word
      * @returns The created block body with game object reference
      */
-    public createBlock(x: number, y: number, letter: string, isFirst: boolean = false): BlockBody {
+    public createBlock(x: number, y: number, letter: string, isFirst: boolean = false): BlockBody | null {
         try {
-            // Create the physics body with all required properties
-            const block = this.scene.matter.add.rectangle(
-                x, 
-                y, 
-                40, // Width
-                40, // Height
-                {
-                    label: 'block',
-                    friction: 0.1,
-                    restitution: 0.3,
-                    density: 0.001,
-                    isStatic: false,
-                    collisionFilter: {
-                        group: isFirst ? -1 : 0, // First block is in its own group
-                        category: 0x0001,
-                        mask: 0xFFFFFFFF
-                    },
-                    // Add custom properties for easier identification
-                    render: {
-                        visible: true
-                    }
+            // Create a container for the block
+            const container = this.scene.add.container(x, y);
+            
+            // Create a simple rectangle for the block
+            const blockGraphic = this.scene.add.graphics();
+            blockGraphic.fillStyle(0x3498db, 1);
+            blockGraphic.fillRect(-20, -20, 40, 40);
+            blockGraphic.lineStyle(2, 0x2980b9, 1);
+            blockGraphic.strokeRect(-20, -20, 40, 40);
+            
+            // Add text for the letter
+            const letterText = this.scene.add.text(0, 0, letter.toUpperCase(), {
+                fontSize: '24px',
+                color: '#ffffff',
+                fontStyle: 'bold',
+                align: 'center'
+            }).setOrigin(0.5);
+            
+            // Add children to container
+            container.add([blockGraphic, letterText]);
+            container.setDepth(1000);
+            
+            // Debug: Add a small red dot at the container's origin
+            const debugDot = this.scene.add.circle(0, 0, 3, 0xff0000);
+            container.add(debugDot);
+            
+            // Make container interactive for debugging
+            container.setInteractive(new Phaser.Geom.Rectangle(-20, -20, 40, 40), Phaser.Geom.Rectangle.Contains);
+            container.on('pointerover', () => {
+                blockGraphic.clear();
+                blockGraphic.fillStyle(0x00ff00, 0.5);
+                blockGraphic.fillRect(-20, -20, 40, 40);
+                console.log('Block hovered:', { x: container.x, y: container.y, letter });
+            });
+            
+            container.on('pointerout', () => {
+                blockGraphic.clear();
+                blockGraphic.fillStyle(0x3498db, 1);
+                blockGraphic.fillRect(-20, -20, 40, 40);
+                blockGraphic.lineStyle(2, 0x2980b9, 1);
+                blockGraphic.strokeRect(-20, -20, 40, 40);
+            });
+            
+            // Create the physics body
+            const block = this.scene.matter.add.gameObject(container, {
+                shape: {
+                    type: 'rectangle',
+                    width: 40,
+                    height: 40
+                },
+                isStatic: false,
+                friction: 0.1,
+                frictionAir: 0.01,
+                restitution: 0.3,
+                density: 0.001,
+                collisionFilter: {
+                    group: isFirst ? -1 : 0,
+                    category: 0x0001,
+                    mask: 0xFFFFFFFF
+                },
+                render: {
+                    visible: false // We'll use our own rendering
+                },
+                ignoreGravity: false,
+                sleepThreshold: 0
+            }) as any; // Using 'any' to avoid TypeScript errors with the game object
+            
+            // Store the container reference on the physics body
+            if (block.body) {
+                (block.body as any).gameObject = container;
+            }
+            
+            // Debug: Add position update logging
+            this.scene.events.on('update', () => {
+                if (block.body) {
+                    container.x = block.body.position.x;
+                    container.y = block.body.position.y;
+                    container.rotation = block.body.angle;
                 }
-            ) as unknown as BlockBody;
+            });
+            
+            // Debug: Log block creation
+            console.log('Created block:', {
+                id: block.body?.id,
+                position: block.body?.position,
+                container: { x: container.x, y: container.y },
+                visible: container.visible,
+                active: container.active
+            });
+            container.y = block.position.y;
+            container.rotation = block.angle;
+            
+            // Add a one-time update listener to verify the position after the first frame
+            this.scene.events.once('update', () => {
+                console.log('After first update:', {
+                    blockPos: block.position,
+                    containerPos: { x: container.x, y: container.y },
+                    containerVisible: container.visible,
+                    containerActive: container.active
+                });
+            });
+            
+            // Log block creation for debugging
+            console.log('Created block:', {
+                id: block.id,
+                position: block.position,
+                isStatic: block.isStatic,
+                label: block.label
+            });
+            
+            return block as unknown as BlockBody;
             
             if (!block) {
                 throw new Error('Failed to create block physics body');
@@ -165,23 +254,48 @@ export class PhysicsManager {
         }
     }
 
-    public createConstraint(bodyA: Matter.Body, bodyB: Matter.Body): Matter.Constraint {
-        return this.scene.matter.add.constraint(
-            bodyA as MatterJS.BodyType,
-            bodyB as MatterJS.BodyType,
-            40, // Length
-            0.1, // Stiffness
-            {
-                pointA: { x: 20, y: 0 },
-                pointB: { x: -20, y: 0 },
-                render: {
-                    visible: false
-                }
+    public createConstraint(bodyA: MatterJS.BodyType, bodyB: MatterJS.BodyType): void {
+        try {
+            // Ensure both bodies exist and have valid positions
+            if (!bodyA || !bodyB) {
+                console.error('Cannot create constraint: one or both bodies are invalid');
+                return;
             }
-        ) as Matter.Constraint;
+            
+            // Create a simple distance constraint between the two bodies
+            // The constraint will be created at the current distance between the bodies
+            // Create a simple distance constraint
+            const constraint = this.scene.matter.add.constraint(
+                bodyA,
+                bodyB,
+                Phaser.Math.Distance.Between(
+                    bodyA.position.x,
+                    bodyA.position.y,
+                    bodyB.position.x,
+                    bodyB.position.y
+                ),
+                0.1, // Stiffness (0-1)
+                {
+                    render: {
+                        visible: false // Hide the constraint for now
+                    }
+                }
+            ) as MatterJS.ConstraintType;
+            
+            // Store the constraint
+            this.constraints.push(constraint);
+            
+            // Log constraint creation for debugging
+            console.log('Created constraint between blocks:', {
+                bodyA: bodyA.id,
+                bodyB: bodyB.id,
+                constraint: constraint.id
+            });
+            
+        } catch (error) {
+            console.error('Error creating constraint:', error);
+        }
     }
-
-    // findHighestBlock method removed - using the one with BlockBody return type instead
 
     /**
      * Converts a physics body to be static
