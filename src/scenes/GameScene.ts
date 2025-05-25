@@ -93,33 +93,32 @@ export class GameScene extends Scene {
         
         // Calculate play area dimensions
         const playAreaWidth = width - (sideMarginWidth * 2);
-        const playAreaHeight = height - topMarginHeight - bottomWallThickness;
         const playAreaLeft = sideMarginWidth;
         const playAreaTop = topMarginHeight;
         
         // Create individual wall bodies manually for the narrower play area
-        const topWall = this.matter.add.rectangle(
+        this.matter.add.rectangle(
             width / 2, 
             playAreaTop - 16, 
             playAreaWidth, 
             32, 
             { isStatic: true, label: 'Bounds Top' }
         );
-        const bottomWall = this.matter.add.rectangle(
+        this.matter.add.rectangle(
             width / 2, 
             height - bottomWallThickness / 2, 
             playAreaWidth, 
             bottomWallThickness, 
             { isStatic: true, label: 'Bounds Bottom' }
         );
-        const leftWall = this.matter.add.rectangle(
+        this.matter.add.rectangle(
             playAreaLeft - 16, 
             height / 2, 
             32, 
             height, 
             { isStatic: true, label: 'Bounds Left' }
         );
-        const rightWall = this.matter.add.rectangle(
+        this.matter.add.rectangle(
             playAreaLeft + playAreaWidth + 16, 
             height / 2, 
             32, 
@@ -160,7 +159,7 @@ export class GameScene extends Scene {
         });
         
         // Listen for score updates to update header
-        this.events.on('addScore', (points: number) => {
+        this.events.on('addScore', () => {
             if (this.headerScoreText && this.uiScene) {
                 this.headerScoreText.setText(this.uiScene.getScore().toString());
             }
@@ -669,7 +668,7 @@ export class GameScene extends Scene {
         this.createMarginPatterns(width, height, sideMarginWidth, topMarginHeight, bottomWallThickness);
         
         // Create header with score and next word
-        this.createGameHeader(width, sideMarginWidth, topMarginHeight, bottomWallThickness);
+        this.createGameHeader(width, sideMarginWidth, topMarginHeight);
     }
 
     private createPlayAreaBorder(width: number, height: number, sideMarginWidth: number, topMarginHeight: number, bottomWallThickness: number) {
@@ -731,7 +730,7 @@ export class GameScene extends Scene {
         }
     }
 
-    private createGameHeader(width: number, sideMarginWidth: number, topMarginHeight: number, bottomWallThickness: number) {
+    private createGameHeader(width: number, sideMarginWidth: number, topMarginHeight: number) {
         const headerHeight = 60;
         const headerY = topMarginHeight - headerHeight - 10;
         

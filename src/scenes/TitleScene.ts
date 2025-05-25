@@ -278,7 +278,7 @@ export class TitleScene extends Scene {
         ];
 
         difficulties.forEach((difficulty) => {
-            const button = new PixelButton({
+            new PixelButton({
                 scene: this,
                 x: this.cameras.main.width / 2,
                 y: buttonYStart + difficulty.y,
@@ -296,7 +296,7 @@ export class TitleScene extends Scene {
 
         // Add "How to Play" button with pixel art style
         const howToPlayY = buttonYStart + buttonSpacing * 3 + 20;
-        const howToPlayButton = new PixelHowToPlayButton({
+        new PixelHowToPlayButton({
             scene: this,
             x: this.cameras.main.width / 2,
             y: howToPlayY,
