@@ -288,7 +288,7 @@ export class GameScene extends Scene {
         this.currentWord = null;
         
         // Add a small delay before spawning the next word to let player see what happened
-        this.time.delayedCall(800, () => {
+        this.time.delayedCall(270, () => {
             if (!this.isGameOver) {
                 this.spawnNextWord();
             }
