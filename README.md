@@ -89,6 +89,55 @@ npm run test      # Run tests with Vitest
 npm run preview   # Preview production build
 ```
 
+## 🚀 Deployment
+
+This project is configured for automatic deployment to GitHub Pages using GitHub Actions.
+
+### Setting Up GitHub Pages Deployment
+
+If you fork this repository and want to deploy it to your own GitHub Pages:
+
+1. **Configure GitHub Pages Source**:
+   - Go to your repository **Settings** → **Pages**
+   - Under **Source**, select **"GitHub Actions"**
+
+2. **Set Workflow Permissions**:
+   - Go to **Settings** → **Actions** → **General**
+   - Under **Workflow permissions**, select **"Read and write permissions"**
+   - Check **"Allow GitHub Actions to create and approve pull requests"**
+
+3. **Update Repository URL** (if forked):
+   - Update the `homepage` field in `package.json`
+   - Update the `base` field in `vite.config.ts`
+   - Update the play link in this README
+
+4. **Deploy**:
+   - Push to the `main` branch
+   - GitHub Actions will automatically build and deploy the site
+   - Your game will be available at `https://yourusername.github.io/spellnami`
+
+### Manual Deployment
+
+To deploy manually to any static hosting service:
+
+```bash
+npm run build
+# Upload the contents of the dist/ folder to your hosting service
+```
+
+### Troubleshooting Deployment
+
+**Common Issues:**
+
+- **Permission denied error**: Make sure workflow permissions are set correctly (step 2 above)
+- **404 on deployed site**: Verify the `base` path in `vite.config.ts` matches your repository name
+- **Build fails**: Check that all dependencies are properly installed and TypeScript compiles without errors
+- **Assets not loading**: Ensure the repository name in the base path is correct
+
+**Checking Deployment Status:**
+- Go to **Actions** tab in your repository to see build/deploy progress
+- Check the **Pages** section in repository settings for deployment URL
+
 ## 🏗️ Project Structure
 
 ```
