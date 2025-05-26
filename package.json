@@ -30,7 +30,8 @@
   "dependencies": {
     "canvas": "^3.1.0",
     "matter-js": "^0.20.0",
-    "phaser": "^3.60.0"
+    "phaser": "^3.60.0",
+    "random-words": "^2.0.1"
   },
   "devDependencies": {
     "@types/matter-js": "^0.19.8",

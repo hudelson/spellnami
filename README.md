@@ -9,6 +9,8 @@ A fast-paced falling-word typing game built with Phaser 3 and TypeScript. Test y
 ## ✨ Features
 
 - **Three Difficulty Levels**: From Apprentice to Master, each with different word lengths and falling speeds
+- **Comprehensive Dictionary**: Over 1,900+ English words dynamically generated using the `random-words` library
+- **Smart Word Selection**: Avoids repetition and filters out confusing words for better gameplay
 - **Physics-Based Gameplay**: Words fall and stack realistically using Matter.js physics
 - **Pixel Art Style**: Retro-inspired visual design with detailed block graphics
 - **High Score System**: Track your top 3 scores locally
@@ -22,15 +24,24 @@ A fast-paced falling-word typing game built with Phaser 3 and TypeScript. Test y
 - Clear the entire word before it reaches the bottom
 - If you make a mistake, the remaining letters will freeze in place and turn blue
 - The game ends when the pile of letters reaches the top of the screen
-- Score points for each word completed - longer words = more points!
+
+### 🏆 Scoring System
+
+- **10 points** per letter typed correctly
+- **50 point bonus** for completing each word
+- **Spectacular visual effects** for word completion including:
+  - Screen flash and explosion effects
+  - Colorful particle bursts
+  - Camera shake for impact
+  - Floating bonus text animations
 
 ## 🎚️ Difficulty Levels
 
-| Level | Word Length | Speed | Description |
-|-------|-------------|-------|-------------|
-| **🟢 Apprentice** | 3-5 letters | Slow | Perfect for beginners |
-| **🟡 Scholar** | 5-7 letters | Medium | Balanced challenge |
-| **🔴 Master** | 7-10 letters | Fast | For typing masters |
+| Level | Word Length | Speed | Available Words | Description |
+|-------|-------------|-------|-----------------|-------------|
+| **🟢 Apprentice** | 3-5 letters | Slow | 1,032 words | Perfect for beginners |
+| **🟡 Scholar** | 5-7 letters | Medium | 1,015 words | Balanced challenge |
+| **🔴 Master** | 7-10 letters | Fast | 518 words | For typing masters |
 
 ## 🎮 Controls
 
@@ -157,6 +168,7 @@ spellnami/
 - **TypeScript**: Full type safety and modern JavaScript features
 - **Phaser 3**: Powerful 2D game framework
 - **Matter.js**: Realistic physics simulation
+- **Random Words Library**: Dynamic word generation from comprehensive English dictionary
 - **Vite**: Fast development and building with HMR
 - **Terser**: Production code minification
 - **ESLint + Prettier**: Code quality and formatting

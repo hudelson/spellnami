@@ -247,11 +247,19 @@ export class GameScene extends Scene {
             this.physicsManager.destroyBody(block as Matter.Body);
         }
         
-        // Update score using the scene's event system
+        // Update score using the scene's event system - 10 points per letter
         this.events.emit('addScore', 10);
         
-        // If all blocks are cleared
+        // If all blocks are cleared - WORD COMPLETED!
         if (this.currentWord.blocks.length === 0) {
+            const completedWord = this.currentWord.text;
+            
+            // Award word completion bonus - 50 points
+            this.events.emit('addScore', 50);
+            
+            // Play spectacular word completion effect
+            this.playWordCompletionEffect(block.position.x, block.position.y, completedWord);
+            
             this.currentWord = null;
             // Spawn next word immediately when word is completed correctly
             this.spawnNextWord();
@@ -272,6 +280,98 @@ export class GameScene extends Scene {
                 }
             }
         }
+    }
+
+    private playWordCompletionEffect(x: number, y: number, word: string) {
+        // Create a spectacular multi-layered effect for word completion
+        
+        // 1. Screen flash effect
+        this.effectManager.playScreenFlash();
+        
+        // 2. Explosion burst at the word location
+        this.effectManager.playExplosionEffect(x, y);
+        
+        // 3. Floating "+50 BONUS!" text
+        const bonusText = this.add.text(x, y - 40, '+50 BONUS!', {
+            fontSize: '24px',
+            color: '#00ff00',
+            fontFamily: 'monospace',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 3
+        }).setOrigin(0.5).setDepth(1000);
+        
+        // Animate the bonus text
+        this.tweens.add({
+            targets: bonusText,
+            y: y - 100,
+            scaleX: 1.5,
+            scaleY: 1.5,
+            alpha: 0,
+            duration: 1500,
+            ease: 'Power2',
+            onComplete: () => {
+                bonusText.destroy();
+            }
+        });
+        
+        // 4. Floating completed word text
+        const wordText = this.add.text(x, y - 10, `"${word.toUpperCase()}"`, {
+            fontSize: '18px',
+            color: '#ffff00',
+            fontFamily: 'monospace',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5).setDepth(999);
+        
+        // Animate the word text
+        this.tweens.add({
+            targets: wordText,
+            y: y - 80,
+            alpha: 0,
+            duration: 2000,
+            ease: 'Power1',
+            onComplete: () => {
+                wordText.destroy();
+            }
+        });
+        
+        // 5. Particle burst effect - create multiple colorful pixels flying outward
+        const particleCount = 15;
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (i / particleCount) * Math.PI * 2;
+            const distance = 50 + Math.random() * 100;
+            
+            const particle = this.add.graphics();
+            particle.setPosition(x, y);
+            
+            // Random bright colors for celebration
+            const colors = [0xff6b35, 0x00ff00, 0x00ffff, 0xff00ff, 0xffff00, 0xff3838];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            
+            particle.fillStyle(color, 1);
+            particle.fillRect(-2, -2, 4, 4);
+            particle.setDepth(998);
+            
+            // Animate particles flying outward
+            this.tweens.add({
+                targets: particle,
+                x: x + Math.cos(angle) * distance,
+                y: y + Math.sin(angle) * distance,
+                scaleX: 0,
+                scaleY: 0,
+                alpha: 0,
+                duration: 1000 + Math.random() * 500,
+                ease: 'Power2',
+                onComplete: () => {
+                    particle.destroy();
+                }
+            });
+        }
+        
+        // 6. Camera shake for impact
+        this.cameras.main.shake(200, 0.01);
     }
 
     private handleWrongKey() {
@@ -830,6 +930,9 @@ export class GameScene extends Scene {
     }
 
     shutdown() {
+        // Clean up event listeners to prevent accumulation
+        this.events.off('addScore');
+        
         // Clean up managers when scene is shut down
         if (this.effectManager) {
             this.effectManager.destroy();

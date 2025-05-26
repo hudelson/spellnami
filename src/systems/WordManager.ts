@@ -1,16 +1,18 @@
 import { Scene } from 'phaser';
 import { PhysicsManager, BlockBody } from './PhysicsManager';
+import { generate, count } from 'random-words';
 
 export class WordManager {
     private scene: Scene;
     private physicsManager: PhysicsManager;
-    private wordList: string[] = [];
     private difficulty: {
         minLength: number;
         maxLength: number;
         speed: number;
     };
     private nextWord: string | null = null; // Store the next word to be spawned
+    private usedWords: Set<string> = new Set(); // Track used words to avoid immediate repeats
+    private totalAvailableWords: number = 0; // Cache the total number of available words
 
     constructor(
         scene: Scene,
@@ -20,63 +22,140 @@ export class WordManager {
         this.scene = scene;
         this.physicsManager = physicsManager;
         this.difficulty = difficulty;
-        this.initializeWordList();
+        this.initializeWordSystem();
         // Pre-select the first next word
         this.nextWord = this.selectRandomWord();
     }
 
-    private initializeWordList() {
-        // Extended word list with words of various lengths
-        const allWords = [
-            // 3-4 letters
-            'cat', 'dog', 'sun', 'hat', 'pen', 'cup', 'key', 'jam', 'ant', 'bee',
-            'car', 'bus', 'egg', 'ink', 'jar', 'keg', 'leg', 'man', 'net', 'owl',
-            'pig', 'rat', 'sun', 'toy', 'van', 'web', 'yak', 'zip', 'arm', 'bed',
-            
-            // 5 letters
-            'apple', 'beach', 'candy', 'dance', 'eagle', 'fairy', 'grape', 'house', 'igloo', 'jelly',
-            'koala', 'lemon', 'mango', 'night', 'olive', 'panda', 'queen', 'river', 'sunny', 'tiger',
-            'umbra', 'vivid', 'water', 'xerox', 'yacht', 'zebra', 'angel', 'bread', 'cloud', 'daisy',
-            
-            // 6-7 letters
-            'banana', 'camera', 'dragon', 'eleven', 'flower', 'guitar', 'harbor', 'island', 'jacket', 'kitten',
-            'laptop', 'monkey', 'napkin', 'orange', 'pencil', 'quarry', 'rabbit', 'sailor', 'turtle', 'umbrella',
-            'vacuum', 'window', 'yellow', 'zephyr', 'basket', 'candle', 'dollar', 'echoes', 'forest', 'garden',
-            
-            // 8-10 letters
-            'elephant', 'football', 'giraffee', 'hospital', 'jellyfish', 'kangaroo', 'lighthouse', 'mushroom', 'notebook', 'octopus',
-            'pineapple', 'question', 'rainbow', 'sunshine', 'tomorrow', 'umbrella', 'volcano', 'waterfall', 'xylophone', 'yesterday',
-            'zucchini', 'adventure', 'butterfly', 'chocolate', 'dinosaur', 'eleven', 'friendly', 'grandma', 'homework', 'jump', 'kite'
-        ];
-
-        // Filter words based on difficulty and log the filtering criteria
-        const minLen = Math.max(3, this.difficulty.minLength); // Ensure minimum length is at least 3
-        const maxLen = Math.min(10, this.difficulty.maxLength); // Ensure maximum length is at most 10
+    private initializeWordSystem() {
+        // Calculate total available words for the current difficulty
+        const minLen = Math.max(3, this.difficulty.minLength);
+        const maxLen = Math.min(15, this.difficulty.maxLength); // Increased max to 15 for more variety
         
-        console.log(`Filtering words for difficulty: ${minLen}-${maxLen} letters`);
-        
-        this.wordList = allWords.filter(word => {
-            const len = word.length;
-            return len >= minLen && len <= maxLen;
+        this.totalAvailableWords = count({ 
+            minLength: minLen, 
+            maxLength: maxLen 
         });
         
-        // If no words match the difficulty, use a default set that matches the criteria
-        if (this.wordList.length === 0) {
-            console.warn(`No words matched the difficulty settings (${minLen}-${maxLen} letters). Using default word list.`);
-            this.wordList = allWords.filter(word => 
-                word.length >= minLen && word.length <= maxLen
-            );
-            
-            // If still no words, use a fallback list
-            if (this.wordList.length === 0) {
-                this.wordList = ['code', 'game', 'type', 'fast', 'slow', 'word', 'play', 'jump', 'fall', 'moon']
-                    .filter(word => word.length >= minLen && word.length <= maxLen);
-            }
-        }
+        console.log(`WordManager initialized with ${this.totalAvailableWords} available words (${minLen}-${maxLen} letters)`);
+        
+        // Clear used words when difficulty changes
+        this.usedWords.clear();
     }
 
     private selectRandomWord(): string {
-        return this.wordList[Math.floor(Math.random() * this.wordList.length)];
+        const minLen = Math.max(3, this.difficulty.minLength);
+        const maxLen = Math.min(15, this.difficulty.maxLength);
+        
+        let attempts = 0;
+        const maxAttempts = 50; // Prevent infinite loops
+        
+        while (attempts < maxAttempts) {
+            try {
+                // Generate a random word with the specified length constraints
+                const word = generate({ 
+                    minLength: minLen, 
+                    maxLength: maxLen 
+                }) as string;
+                
+                // Validate the word
+                if (this.isValidWord(word)) {
+                    // If we haven't used too many words yet, or this word hasn't been used recently
+                    if (this.usedWords.size < this.totalAvailableWords * 0.7 || !this.usedWords.has(word)) {
+                        // Add to used words (but limit the size to prevent memory issues)
+                        this.usedWords.add(word);
+                        
+                        // If we've used too many words, clear some old ones
+                        if (this.usedWords.size > Math.min(100, this.totalAvailableWords * 0.8)) {
+                            const wordsToRemove = Array.from(this.usedWords).slice(0, 20);
+                            wordsToRemove.forEach(w => this.usedWords.delete(w));
+                        }
+                        
+                        return word.toLowerCase();
+                    }
+                }
+            } catch (error) {
+                console.warn('Error generating word:', error);
+            }
+            
+            attempts++;
+        }
+        
+        // Fallback: if we can't generate a new word, clear used words and try again
+        console.warn('Could not generate unused word, clearing used words cache');
+        this.usedWords.clear();
+        
+        try {
+            const fallbackWord = generate({ 
+                minLength: minLen, 
+                maxLength: maxLen 
+            }) as string;
+            
+            if (this.isValidWord(fallbackWord)) {
+                return fallbackWord.toLowerCase();
+            }
+        } catch (error) {
+            console.error('Error generating fallback word:', error);
+        }
+        
+        // Ultimate fallback to ensure game doesn't break
+        const emergencyWords = ['code', 'game', 'play', 'word', 'type', 'fast', 'jump', 'fall'];
+        const validEmergencyWords = emergencyWords.filter(word => 
+            word.length >= minLen && word.length <= maxLen
+        );
+        
+        if (validEmergencyWords.length > 0) {
+            return validEmergencyWords[Math.floor(Math.random() * validEmergencyWords.length)];
+        }
+        
+        // Last resort
+        return 'word';
+    }
+
+    private isValidWord(word: string): boolean {
+        if (!word || typeof word !== 'string') {
+            return false;
+        }
+        
+        // Check length constraints
+        const minLen = Math.max(3, this.difficulty.minLength);
+        const maxLen = Math.min(15, this.difficulty.maxLength);
+        
+        if (word.length < minLen || word.length > maxLen) {
+            return false;
+        }
+        
+        // Check that word contains only letters
+        if (!/^[a-zA-Z]+$/.test(word)) {
+            return false;
+        }
+        
+        // Filter out potentially inappropriate or confusing words
+        const bannedWords = [
+            // Common abbreviations that might be confusing
+            'www', 'http', 'html', 'css', 'xml', 'json', 'api',
+            // Very short words that might be too easy
+            'a', 'i', 'an', 'at', 'be', 'by', 'do', 'go', 'he', 'if', 'in', 'is', 'it', 'me', 'my', 'no', 'of', 'on', 'or', 'so', 'to', 'up', 'we'
+        ];
+        
+        if (bannedWords.includes(word.toLowerCase())) {
+            return false;
+        }
+        
+        // Avoid words with repeated letters that might be confusing for typing
+        const letterCounts = new Map<string, number>();
+        for (const letter of word.toLowerCase()) {
+            letterCounts.set(letter, (letterCounts.get(letter) || 0) + 1);
+        }
+        
+        // Reject words where any letter appears more than 3 times (like "mississippi")
+        for (const count of letterCounts.values()) {
+            if (count > 3) {
+                return false;
+            }
+        }
+        
+        return true;
     }
 
     public createWord() {
@@ -87,6 +166,7 @@ export class WordManager {
         this.nextWord = this.selectRandomWord();
         
         console.log('Creating word:', word, '| Next word will be:', this.nextWord);
+        console.log(`Used words cache size: ${this.usedWords.size}/${this.totalAvailableWords}`);
         
         // Calculate starting position (random horizontal, at the top of the screen)
         const screenWidth = this.scene.cameras.main.width;
@@ -184,7 +264,29 @@ export class WordManager {
         return this.nextWord;
     }
 
+    public getWordStats(): { totalAvailable: number; usedCount: number; usagePercentage: number } {
+        return {
+            totalAvailable: this.totalAvailableWords,
+            usedCount: this.usedWords.size,
+            usagePercentage: this.totalAvailableWords > 0 ? (this.usedWords.size / this.totalAvailableWords) * 100 : 0
+        };
+    }
+
+    public resetUsedWords(): void {
+        this.usedWords.clear();
+        console.log('Used words cache cleared');
+    }
+
+    public updateDifficulty(newDifficulty: { minLength: number; maxLength: number; speed: number }): void {
+        this.difficulty = newDifficulty;
+        this.initializeWordSystem();
+        // Generate a new next word with the updated difficulty
+        this.nextWord = this.selectRandomWord();
+        console.log('Difficulty updated, new next word:', this.nextWord);
+    }
+
     public cleanup() {
         // Clean up any resources if needed
+        this.usedWords.clear();
     }
 }

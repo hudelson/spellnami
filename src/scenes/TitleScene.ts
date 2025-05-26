@@ -598,7 +598,8 @@ export class TitleScene extends Scene {
             '',
             'SCORING:',
             '• 10 points per letter typed correctly',
-            '• Complete words for bonus effects!'
+            '• 50 point bonus for completing each word!',
+            '• Spectacular effects for word completion!'
         ];
         
         const closeButton = this.add.text(popupWidth/2 - 30, -popupHeight/2 + 20, '✕', {

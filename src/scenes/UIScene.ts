@@ -346,19 +346,30 @@ export class UIScene extends Scene {
             this.difficultySettings[this.currentDifficulty] = data.settings;
         }
         
+        // Clean up any existing event listeners to prevent accumulation
+        this.events.off('addScore');
+        this.events.off('gameOver');
+        
         // Set up event listeners
         this.events.on('addScore', this.addScore, this);
         this.events.on('gameOver', this.showGameOver, this);
         
-        // Listen for score updates from the GameScene
-        this.scene.get('GameScene').events.on('addScore', (points: number) => {
-            this.addScore(points);
-        });
-        
-        // Listen for game over from the GameScene
-        this.scene.get('GameScene').events.on('gameOver', () => {
-            this.showGameOver();
-        });
+        // Clean up any existing GameScene event listeners to prevent accumulation
+        const gameScene = this.scene.get('GameScene');
+        if (gameScene && gameScene.events) {
+            gameScene.events.off('addScore');
+            gameScene.events.off('gameOver');
+            
+            // Listen for score updates from the GameScene
+            gameScene.events.on('addScore', (points: number) => {
+                this.addScore(points);
+            });
+            
+            // Listen for game over from the GameScene
+            gameScene.events.on('gameOver', () => {
+                this.showGameOver();
+            });
+        }
 
         // Create score text (hidden since we show it in game header)
         this.scoreText = this.add.text(20, 20, 'Score: 0', {
