@@ -191,14 +191,7 @@ export class GameScene extends Scene {
         }
     }
 
-    private scheduleNextWord() {
-        // Longer delay before spawning the next word
-        this.time.delayedCall(2500, () => {
-            if (!this.isGameOver) {
-                this.spawnNextWord();
-            }
-        });
-    }
+
 
     private handleKeyPress(event: KeyboardEvent) {
         if (this.isGameOver || !this.currentWord) return;

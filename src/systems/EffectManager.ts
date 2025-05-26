@@ -34,7 +34,7 @@ export class EffectManager {
             { x: 2, y: 0, size: 2 }
         ];
         
-        pixels.forEach((pixel, index) => {
+        pixels.forEach((pixel) => {
             const colorIndex = Math.floor(Math.random() * flameColors.length);
             effect.fillStyle(flameColors[colorIndex], 1);
             effect.fillRect(pixel.x, pixel.y, pixel.size, pixel.size);
@@ -87,7 +87,7 @@ export class EffectManager {
             { x: 3, y: 3, size: 2 }
         ];
         
-        crystals.forEach((crystal, index) => {
+        crystals.forEach((crystal) => {
             const colorIndex = Math.floor(Math.random() * iceColors.length);
             effect.fillStyle(iceColors[colorIndex], 0.8);
             effect.fillRect(crystal.x, crystal.y, crystal.size, crystal.size);
@@ -142,7 +142,7 @@ export class EffectManager {
                     { x: 4, y: 4, size: 2 }
                 ];
                 
-                burstPixels.forEach((pixel, index) => {
+                burstPixels.forEach((pixel) => {
                     const colorIndex = Math.floor(Math.random() * explosionColors.length);
                     effect.fillStyle(explosionColors[colorIndex], 1);
                     effect.fillRect(pixel.x, pixel.y, pixel.size, pixel.size);

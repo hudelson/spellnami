@@ -29,7 +29,12 @@ export default defineConfig({
     target: 'esnext',
     minify: 'terser',
     sourcemap: true,
-    assetsInlineLimit: 0 // Ensure SVGs are not inlined
+    assetsInlineLimit: 0, // Ensure SVGs are not inlined
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html')
+      }
+    }
   },
   server: {
     port: 3000,

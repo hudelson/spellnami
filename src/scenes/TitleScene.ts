@@ -353,7 +353,7 @@ export class TitleScene extends Scene {
         const titleY = this.cameras.main.height * 0.25;
         
         // Shadow layer (offset)
-        const shadowTitle = this.add.text(centerX + 4, titleY + 4, 'SPELLNAMI', {
+        this.add.text(centerX + 4, titleY + 4, 'SPELLNAMI', {
             fontSize: '72px',
             color: '#000000',
             fontFamily: 'monospace',
@@ -371,7 +371,7 @@ export class TitleScene extends Scene {
         }).setOrigin(0.5);
         
         // Highlight layer (slight offset for 3D effect)
-        const highlightTitle = this.add.text(centerX - 2, titleY - 2, 'SPELLNAMI', {
+        this.add.text(centerX - 2, titleY - 2, 'SPELLNAMI', {
             fontSize: '72px',
             color: '#ffffff',
             fontFamily: 'monospace',

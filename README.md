@@ -4,7 +4,7 @@ A fast-paced falling-word typing game built with Phaser 3 and TypeScript. Test y
 
 ## 🎮 Play Online
 
-**[Play Spellnami Now!](https://hudelson.github.io/spellnami)** *(Coming soon)*
+**[Play Spellnami Now!](https://hudelson.github.io/spellnami)**
 
 ## ✨ Features
 
@@ -42,8 +42,8 @@ A fast-paced falling-word typing game built with Phaser 3 and TypeScript. Test y
 
 ### Prerequisites
 
-- Node.js (v16 or higher)
-- npm (v7 or higher)
+- Node.js (v18 or higher)
+- npm (v8 or higher)
 
 ### Installation
 
@@ -64,6 +64,13 @@ A fast-paced falling-word typing game built with Phaser 3 and TypeScript. Test y
    ```
 
 4. Open your browser and navigate to `http://localhost:3000`
+
+### Development Notes
+
+- The project uses **Vite** for fast development and building
+- **TypeScript** compilation is handled automatically
+- **Terser** is used for production minification
+- Source maps are generated for debugging
 
 ### Building for Production
 
@@ -101,9 +108,11 @@ spellnami/
 - **TypeScript**: Full type safety and modern JavaScript features
 - **Phaser 3**: Powerful 2D game framework
 - **Matter.js**: Realistic physics simulation
-- **Vite**: Fast development and building
+- **Vite**: Fast development and building with HMR
+- **Terser**: Production code minification
 - **ESLint + Prettier**: Code quality and formatting
 - **Pixel Art Graphics**: Custom-drawn game elements
+- **GitHub Pages**: Automated deployment via GitHub Actions
 
 ## 🤝 Contributing
 

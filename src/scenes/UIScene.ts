@@ -78,7 +78,7 @@ export class UIScene extends Scene {
     private showGameOver() {
         // Only update top scores once per game session
         if (!this.scoreAlreadyRecorded) {
-            const isNewHighScore = this.updateTopScores(this.score);
+            this.updateTopScores(this.score);
             this.scoreAlreadyRecorded = true;
         }
         
