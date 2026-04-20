@@ -89,3 +89,6 @@ Desktop.ini
 .dynamodb/
 .tern-port
 .vscode-test
+
+# Claude Code
+.claude/
