@@ -1,9 +1,13 @@
 import { Scene } from 'phaser';
+import { GameMode } from '../types/GameTypes';
 
 interface DifficultySettings {
-    name: string;
-    minLength: number;
-    maxLength: number;
+    name?: string;
+    minLength?: number;
+    maxLength?: number;
+    operation?: string;
+    minOperand?: number;
+    maxOperand?: number;
     speed: number;
     color: string;
 }
@@ -12,14 +16,16 @@ export class UIScene extends Scene {
     private scoreText!: Phaser.GameObjects.Text;
     private gameOverPanel!: Phaser.GameObjects.Container;
     private score: number = 0;
-    private difficultySettings: { [key: string]: DifficultySettings } = {
-        apprentice: { name: 'Apprentice', minLength: 3, maxLength: 5, speed: 120, color: '#4CAF50' },
-        scholar: { name: 'Scholar', minLength: 5, maxLength: 7, speed: 170, color: '#FF9800' },
-        master: { name: 'Master', minLength: 7, maxLength: 10, speed: 220, color: '#F44336' }
-    };
+    private difficultySettings!: DifficultySettings;
     private currentDifficulty!: string;
+    private currentMode: GameMode = GameMode.Spell;
     private topScores: number[] = [];
     private scoreAlreadyRecorded: boolean = false;
+    // Health bars for Math mode
+    private playerHealthBar?: Phaser.GameObjects.Graphics;
+    private enemyHealthBar?: Phaser.GameObjects.Graphics;
+    private playerHealthText?: Phaser.GameObjects.Text;
+    private enemyHealthText?: Phaser.GameObjects.Text;
 
     constructor() {
         super('UIScene');
@@ -326,12 +332,20 @@ export class UIScene extends Scene {
         ]).setDepth(1000).setVisible(false);
     }
 
-    create(data: { difficulty: string; settings: any }) {
+    create(data: { difficulty: string; settings: any; mode?: GameMode }) {
         // Reset score recording flag for new game
         this.scoreAlreadyRecorded = false;
         
         // Load top scores from localStorage
         this.loadTopScores();
+        
+        // Get mode from data or registry
+        if (data && data.mode) {
+            this.currentMode = data.mode;
+            this.registry.set('gameMode', data.mode);
+        } else {
+            this.currentMode = this.registry.get('gameMode') || GameMode.Spell;
+        }
         
         // Get difficulty from scene data or registry
         if (data && data.difficulty) {
@@ -343,22 +357,26 @@ export class UIScene extends Scene {
         
         // Update difficulty settings if provided
         if (data && data.settings) {
-            this.difficultySettings[this.currentDifficulty] = data.settings;
+            this.difficultySettings = data.settings;
+            this.registry.set('settings', data.settings);
         }
         
         // Clean up any existing event listeners to prevent accumulation
         this.events.off('addScore');
         this.events.off('gameOver');
+        this.events.off('updateHealth');
         
         // Set up event listeners
         this.events.on('addScore', this.addScore, this);
         this.events.on('gameOver', this.showGameOver, this);
+        this.events.on('updateHealth', this.updateHealthBars, this);
         
         // Clean up any existing GameScene event listeners to prevent accumulation
         const gameScene = this.scene.get('GameScene');
         if (gameScene && gameScene.events) {
             gameScene.events.off('addScore');
             gameScene.events.off('gameOver');
+            gameScene.events.off('updateHealth');
             
             // Listen for score updates from the GameScene
             gameScene.events.on('addScore', (points: number) => {
@@ -368,6 +386,11 @@ export class UIScene extends Scene {
             // Listen for game over from the GameScene
             gameScene.events.on('gameOver', () => {
                 this.showGameOver();
+            });
+            
+            // Listen for health updates from the GameScene
+            gameScene.events.on('updateHealth', (data: any) => {
+                this.updateHealthBars(data);
             });
         }
 
@@ -382,10 +405,117 @@ export class UIScene extends Scene {
 
         // Create game over panel (initially hidden)
         this.createGameOverPanel();
+        
+        // Create health bars for Math mode
+        if (this.currentMode === GameMode.Math) {
+            this.createHealthBars();
+        }
+    }
+    
+    /**
+     * Create health bars for ship battle mode
+     */
+    private createHealthBars() {
+        const { width } = this.cameras.main;
+        
+        // Player health bar (bottom)
+        const playerBarX = width / 2 - 100;
+        const playerBarY = this.cameras.main.height - 40;
+        
+        this.playerHealthBar = this.add.graphics();
+        this.playerHealthText = this.add.text(playerBarX - 80, playerBarY - 10, 'PLAYER', {
+            fontSize: '14px',
+            color: '#00ff00',
+            fontFamily: 'monospace',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setDepth(200);
+        
+        // Enemy health bar (top)
+        const enemyBarX = width / 2 - 100;
+        const enemyBarY = 30;
+        
+        this.enemyHealthBar = this.add.graphics();
+        this.enemyHealthText = this.add.text(enemyBarX - 80, enemyBarY - 10, 'ENEMY', {
+            fontSize: '14px',
+            color: '#ff0000',
+            fontFamily: 'monospace',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setDepth(200);
+        
+        // Draw initial health bars (full)
+        this.drawHealthBar(this.playerHealthBar, playerBarX, playerBarY, 100, 100, 0x00ff00);
+        this.drawHealthBar(this.enemyHealthBar, enemyBarX, enemyBarY, 100, 100, 0xff0000);
+    }
+    
+    /**
+     * Draw a health bar
+     */
+    private drawHealthBar(
+        graphics: Phaser.GameObjects.Graphics,
+        x: number,
+        y: number,
+        current: number,
+        max: number,
+        color: number
+    ) {
+        graphics.clear();
+        graphics.setDepth(200);
+        
+        const barWidth = 200;
+        const barHeight = 20;
+        const fillWidth = (current / max) * barWidth;
+        
+        // Background (empty part)
+        graphics.fillStyle(0x333333, 1);
+        graphics.fillRect(x, y, barWidth, barHeight);
+        
+        // Health fill
+        graphics.fillStyle(color, 1);
+        graphics.fillRect(x, y, fillWidth, barHeight);
+        
+        // Border
+        graphics.lineStyle(2, 0xffffff, 1);
+        graphics.strokeRect(x, y, barWidth, barHeight);
+        
+        // Pixel-art style highlights
+        graphics.lineStyle(1, 0xffffff, 0.5);
+        graphics.strokeRect(x + 2, y + 2, barWidth - 4, barHeight - 4);
+    }
+    
+    /**
+     * Update health bars
+     */
+    private updateHealthBars(data: {
+        playerHealth: number;
+        playerMaxHealth: number;
+        enemyHealth: number;
+        enemyMaxHealth: number;
+    }) {
+        if (!this.playerHealthBar || !this.enemyHealthBar) return;
+        
+        const { width } = this.cameras.main;
+        const playerBarX = width / 2 - 100;
+        const playerBarY = this.cameras.main.height - 40;
+        const enemyBarX = width / 2 - 100;
+        const enemyBarY = 30;
+        
+        // Determine color based on health percentage
+        const playerHealthPercent = data.playerHealth / data.playerMaxHealth;
+        const playerColor = playerHealthPercent > 0.5 ? 0x00ff00 : playerHealthPercent > 0.25 ? 0xffff00 : 0xff0000;
+        
+        const enemyHealthPercent = data.enemyHealth / data.enemyMaxHealth;
+        const enemyColor = enemyHealthPercent > 0.5 ? 0xff0000 : enemyHealthPercent > 0.25 ? 0xff8800 : 0xff0000;
+        
+        this.drawHealthBar(this.playerHealthBar, playerBarX, playerBarY, data.playerHealth, data.playerMaxHealth, playerColor);
+        this.drawHealthBar(this.enemyHealthBar, enemyBarX, enemyBarY, data.enemyHealth, data.enemyMaxHealth, enemyColor);
     }
 
     public getDifficultySettings(): DifficultySettings {
-        return this.difficultySettings[this.currentDifficulty];
+        return this.difficultySettings;
     }
 
     public getScore(): number {

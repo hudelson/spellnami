@@ -1,16 +1,18 @@
 {
   "name": "spellnami",
   "private": true,
-  "version": "1.0.0",
-  "description": "A falling-word typing game built with Phaser 3 and TypeScript. Test your typing skills as words fall from the sky!",
+  "version": "2.0.0",
+  "description": "An educational game suite with typing (Spellnami) and math (Mathnami) modes. Built with Phaser 3 and TypeScript.",
   "type": "module",
   "keywords": [
     "game",
     "typing",
+    "math",
+    "education",
     "phaser",
     "typescript",
-    "tetris",
-    "word-game"
+    "word-game",
+    "math-game"
   ],
   "author": "Phil Hudelson",
   "license": "MIT",

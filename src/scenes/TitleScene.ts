@@ -1,4 +1,5 @@
 import { Scene, Types } from 'phaser';
+import { GameMode, DifficultyLevel, MathOperation, SpellDifficultySettings, MathDifficultySettings } from '../types/GameTypes';
 
 interface ButtonConfig {
     scene: Phaser.Scene;
@@ -236,6 +237,8 @@ class PixelHowToPlayButton extends Phaser.GameObjects.Container {
 
 export class TitleScene extends Scene {
     private howToPlayPopup: Phaser.GameObjects.Container | null = null;
+    private currentScreen: 'mode' | 'difficulty' = 'mode';
+    private selectedMode: GameMode | null = null;
 
     constructor() {
         super({ key: 'TitleScene' });
@@ -251,66 +254,11 @@ export class TitleScene extends Scene {
         // Create animated pixel border
         this.createAnimatedBorder();
         
-        // Add subtitle with pixel styling
-        const subtitle = this.add.text(
-            this.cameras.main.width / 2,
-            this.cameras.main.height * 0.25 + 80,
-            'Select Difficulty',
-            {
-                fontSize: '28px',
-                color: '#00ffff',
-                fontFamily: 'monospace',
-                fontStyle: 'bold',
-                stroke: '#000',
-                strokeThickness: 3
-            }
-        ).setOrigin(0.5);
-
-        // Calculate button positions
-        const buttonSpacing = 80;
-        const buttonYStart = subtitle.y + 60;
-
-        // Create difficulty buttons with enhanced pixel art style
-        const difficulties = [
-            { text: 'Apprentice', key: 'apprentice', y: 0, color: 0x4CAF50, hoverColor: 0x66BB6A },
-            { text: 'Scholar', key: 'scholar', y: buttonSpacing, color: 0xFF9800, hoverColor: 0xFFB74D },
-            { text: 'Master', key: 'master', y: buttonSpacing * 2, color: 0xF44336, hoverColor: 0xEF5350 }
-        ];
-
-        difficulties.forEach((difficulty) => {
-            new PixelButton({
-                scene: this,
-                x: this.cameras.main.width / 2,
-                y: buttonYStart + difficulty.y,
-                text: difficulty.text,
-                style: {
-                    fontSize: '24px',
-                    color: '#fff',
-                    fontStyle: 'bold'
-                },
-                onClick: () => this.startGame(difficulty.key as 'apprentice' | 'scholar' | 'master'),
-                normalColor: difficulty.color,
-                hoverColor: difficulty.hoverColor
-            });
-        });
-
-        // Add "How to Play" button with pixel art style
-        const howToPlayY = buttonYStart + buttonSpacing * 3 + 20;
-        new PixelHowToPlayButton({
-            scene: this,
-            x: this.cameras.main.width / 2,
-            y: howToPlayY,
-            text: 'How to Play',
-            style: {
-                fontSize: '18px',
-                color: '#fff',
-                fontStyle: 'bold'
-            },
-            onClick: () => this.showHowToPlay()
-        });
-
         // Initialize enhanced pixel-art particles in the background
         this.initPixelParticles();
+        
+        // Show mode selection screen by default
+        this.showModeSelection();
     }
 
     private createPixelBackground() {
@@ -377,6 +325,50 @@ export class TitleScene extends Scene {
             fontFamily: 'monospace',
             fontStyle: 'bold'
         }).setOrigin(0.5).setAlpha(0.3);
+        
+        // V2.0 Badge with 3D rotation
+        const badgeX = centerX + 280;
+        const badgeY = titleY - 20;
+        
+        const v2Badge = this.add.text(badgeX, badgeY, 'V2.0!', {
+            fontSize: '32px',
+            color: '#ffff00',
+            fontFamily: 'monospace',
+            fontStyle: 'bold',
+            stroke: '#ff6600',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+        
+        // 3D rotation effect using scale manipulation
+        this.tweens.add({
+            targets: v2Badge,
+            duration: 2000,
+            repeat: -1,
+            ease: 'Linear',
+            onUpdate: (tween) => {
+                const progress = tween.progress;
+                const angle = progress * Math.PI * 2;
+                // Simulate 3D rotation by scaling X (horizontal squish)
+                const scaleX = Math.abs(Math.cos(angle));
+                v2Badge.setScale(scaleX, 1);
+                // Add slight vertical bob
+                v2Badge.setY(badgeY + Math.sin(angle * 2) * 5);
+            }
+        });
+        
+        // Color pulse for extra attention
+        this.tweens.add({
+            targets: v2Badge,
+            duration: 1000,
+            repeat: -1,
+            yoyo: true,
+            onUpdate: (tween) => {
+                const progress = tween.progress;
+                const colors = [0xffff00, 0xff6600];
+                const colorIndex = Math.floor(progress * colors.length);
+                v2Badge.setTint(colors[colorIndex] || 0xffff00);
+            }
+        });
         
         // Add pulsing animation to main title
         this.tweens.add({
@@ -750,14 +742,199 @@ export class TitleScene extends Scene {
         });
     }
 
-    private startGame(difficulty: 'apprentice' | 'scholar' | 'master') {
-        const difficultySettings = {
-            apprentice: { minLength: 3, maxLength: 5, speed: 120, color: '#4CAF50' },
-            scholar: { minLength: 5, maxLength: 7, speed: 170, color: '#FF9800' },
-            master: { minLength: 7, maxLength: 10, speed: 220, color: '#F44336' }
-        };
+    private showModeSelection() {
+        this.currentScreen = 'mode';
         
-        this.scene.start('UIScene', { difficulty: difficulty, settings: difficultySettings[difficulty] });
-        this.scene.start('GameScene', { difficulty: difficulty });
+        // Add subtitle
+        const subtitle = this.add.text(
+            this.cameras.main.width / 2,
+            this.cameras.main.height * 0.25 + 80,
+            'Select Game Mode',
+            {
+                fontSize: '28px',
+                color: '#00ffff',
+                fontFamily: 'monospace',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 3
+            }
+        ).setOrigin(0.5).setName('modeSubtitle');
+
+        const centerX = this.cameras.main.width / 2;
+        const centerY = this.cameras.main.height / 2 + 60; // Moved down 60px
+        const gridSpacingX = 240;
+        const gridSpacingY = 100;
+
+        // Create mode selection buttons in 2x2 grid
+        const modes = [
+            { text: 'Spellnami', mode: GameMode.Spell, row: 0, col: 0, color: 0x4CAF50, hoverColor: 0x66BB6A, disabled: false },
+            { text: 'Mathnami', mode: GameMode.Math, row: 0, col: 1, color: 0xFF9800, hoverColor: 0xFFB74D, disabled: false },
+            { text: 'Flags\n(Coming Soon)', mode: GameMode.Flags, row: 1, col: 0, color: 0x666666, hoverColor: 0x777777, disabled: true },
+            { text: 'Morse\n(Coming Soon)', mode: GameMode.Morse, row: 1, col: 1, color: 0x666666, hoverColor: 0x777777, disabled: true }
+        ];
+
+        modes.forEach((modeData) => {
+            const x = centerX + (modeData.col - 0.5) * gridSpacingX;
+            const y = centerY + (modeData.row - 0.5) * gridSpacingY;
+            
+            const button = new PixelButton({
+                scene: this,
+                x: x,
+                y: y,
+                text: modeData.text,
+                style: {
+                    fontSize: '22px',
+                    color: modeData.disabled ? '#888' : '#fff',
+                    fontStyle: 'bold',
+                    align: 'center'
+                },
+                onClick: modeData.disabled ? () => {} : () => this.selectMode(modeData.mode),
+                normalColor: modeData.color,
+                hoverColor: modeData.disabled ? modeData.color : modeData.hoverColor
+            });
+            button.setName('modeButton');
+        });
+
+        // Add "How to Play" button below grid
+        const howToPlayY = centerY + gridSpacingY + 40;
+        const helpButton = new PixelHowToPlayButton({
+            scene: this,
+            x: centerX,
+            y: howToPlayY,
+            text: 'How to Play',
+            style: {
+                fontSize: '18px',
+                color: '#fff',
+                fontStyle: 'bold'
+            },
+            onClick: () => this.showHowToPlay()
+        });
+        helpButton.setName('helpButton');
+    }
+
+    private selectMode(mode: GameMode) {
+        this.selectedMode = mode;
+        
+        // Clear mode selection UI
+        this.children.list.filter(child => 
+            child.name === 'modeSubtitle' || child.name === 'modeButton' || child.name === 'helpButton'
+        ).forEach(child => child.destroy());
+        
+        // Show difficulty selection for the chosen mode
+        this.showDifficultySelection(mode);
+    }
+
+    private showDifficultySelection(mode: GameMode) {
+        this.currentScreen = 'difficulty';
+        
+        // Add subtitle based on mode
+        const modeLabel = mode === GameMode.Spell ? 'Spellnami' : 'Mathnami';
+        const subtitle = this.add.text(
+            this.cameras.main.width / 2,
+            this.cameras.main.height * 0.25 + 80,
+            `${modeLabel} - Select Difficulty`,
+            {
+                fontSize: '28px',
+                color: '#00ffff',
+                fontFamily: 'monospace',
+                fontStyle: 'bold',
+                stroke: '#000',
+                strokeThickness: 3
+            }
+        ).setOrigin(0.5).setName('difficultySubtitle');
+
+        const buttonSpacing = 80;
+        const buttonYStart = subtitle.y + 60;
+
+        let difficulties: any[];
+        
+        if (mode === GameMode.Spell) {
+            difficulties = [
+                { text: 'Apprentice', key: DifficultyLevel.Apprentice, y: 0, color: 0x4CAF50, hoverColor: 0x66BB6A },
+                { text: 'Scholar', key: DifficultyLevel.Scholar, y: buttonSpacing, color: 0xFF9800, hoverColor: 0xFFB74D },
+                { text: 'Master', key: DifficultyLevel.Master, y: buttonSpacing * 2, color: 0xF44336, hoverColor: 0xEF5350 }
+            ];
+        } else {
+            // Math mode has 4 difficulties
+            difficulties = [
+                { text: 'Apprentice (+)', key: DifficultyLevel.Apprentice, y: 0, color: 0x4CAF50, hoverColor: 0x66BB6A },
+                { text: 'Scholar (−)', key: DifficultyLevel.Scholar, y: buttonSpacing, color: 0xFF9800, hoverColor: 0xFFB74D },
+                { text: 'Master (×)', key: DifficultyLevel.Master, y: buttonSpacing * 2, color: 0xF44336, hoverColor: 0xEF5350 },
+                { text: 'Grandmaster (÷)', key: DifficultyLevel.Grandmaster, y: buttonSpacing * 3, color: 0x9C27B0, hoverColor: 0xBA68C8 }
+            ];
+        }
+
+        difficulties.forEach((difficulty) => {
+            const button = new PixelButton({
+                scene: this,
+                x: this.cameras.main.width / 2,
+                y: buttonYStart + difficulty.y,
+                text: difficulty.text,
+                style: {
+                    fontSize: '22px',
+                    color: '#fff',
+                    fontStyle: 'bold'
+                },
+                onClick: () => this.startGame(mode, difficulty.key),
+                normalColor: difficulty.color,
+                hoverColor: difficulty.hoverColor
+            });
+            button.setName('difficultyButton');
+        });
+
+        // Add back button
+        const backButton = new PixelHowToPlayButton({
+            scene: this,
+            x: this.cameras.main.width / 2,
+            y: buttonYStart + buttonSpacing * (difficulties.length + 0.5),
+            text: '← Back',
+            style: {
+                fontSize: '18px',
+                color: '#fff',
+                fontStyle: 'bold'
+            },
+            onClick: () => this.backToModeSelection()
+        });
+        backButton.setName('backButton');
+    }
+
+    private backToModeSelection() {
+        // Clear difficulty selection UI
+        this.children.list.filter(child => 
+            child.name === 'difficultySubtitle' || child.name === 'difficultyButton' || child.name === 'backButton'
+        ).forEach(child => child.destroy());
+        
+        // Show mode selection again
+        this.showModeSelection();
+    }
+
+    private startGame(mode: GameMode, difficulty: DifficultyLevel) {
+        let settings: SpellDifficultySettings | MathDifficultySettings;
+        
+        if (mode === GameMode.Spell) {
+            const spellSettings = {
+                apprentice: { minLength: 3, maxLength: 5, speed: 120, color: '#4CAF50' },
+                scholar: { minLength: 5, maxLength: 7, speed: 170, color: '#FF9800' },
+                master: { minLength: 7, maxLength: 10, speed: 220, color: '#F44336' }
+            };
+            settings = spellSettings[difficulty as 'apprentice' | 'scholar' | 'master'];
+        } else {
+            // Math mode
+            const mathSettings = {
+                apprentice: { operation: MathOperation.Addition, minOperand: 1, maxOperand: 10, speed: 120, color: '#4CAF50' },
+                scholar: { operation: MathOperation.Subtraction, minOperand: 1, maxOperand: 20, speed: 170, color: '#FF9800' },
+                master: { operation: MathOperation.Multiplication, minOperand: 2, maxOperand: 12, speed: 220, color: '#F44336' },
+                grandmaster: { operation: MathOperation.Division, minOperand: 2, maxOperand: 12, speed: 250, color: '#9C27B0' }
+            };
+            settings = mathSettings[difficulty as 'apprentice' | 'scholar' | 'master' | 'grandmaster'];
+        }
+        
+        // Store game config in registry
+        this.registry.set('gameMode', mode);
+        this.registry.set('difficulty', difficulty);
+        this.registry.set('settings', settings);
+        
+        this.scene.start('UIScene', { difficulty, settings, mode });
+        this.scene.start('GameScene', { difficulty, mode });
     }
 }

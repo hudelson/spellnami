@@ -1,9 +1,11 @@
 import { Scene } from 'phaser';
 import * as Matter from 'matter-js';
 import { WordManager } from '../systems/WordManager';
+import { MathManager, Equation } from '../systems/MathManager';
 import { PhysicsManager } from '../systems/PhysicsManager';
 import { EffectManager } from '../systems/EffectManager';
 import { UIScene } from './UIScene';
+import { GameMode } from '../types/GameTypes';
 
 // Extend MatterJS.BodyType to include our custom properties
 type BlockBody = MatterJS.BodyType & {
@@ -25,46 +27,78 @@ declare global {
 
 export class GameScene extends Scene {
     private wordManager!: WordManager;
+    private mathManager!: MathManager;
     private physicsManager!: PhysicsManager;
     private effectManager!: EffectManager;
     private uiScene!: UIScene;
     private isGameOver: boolean = false;
+    private gameMode!: GameMode;
     // Define the current word with our block type
     private currentWord: { text: string; blocks: BlockBody[] } | null = null;
+    // Define the current equation for math mode
+    private currentEquation: Equation | null = null;
     // Header UI elements
     private headerScoreText!: Phaser.GameObjects.Text;
     private headerNextWordText!: Phaser.GameObjects.Text;
+    // Ship battle state (Math mode only)
+    private playerShip?: Phaser.GameObjects.Image;
+    private enemyShip?: Phaser.GameObjects.Image;
+    private playerHealth: number = 100;
+    private enemyHealth: number = 100;
+    private readonly maxHealth: number = 100;
 
     constructor() {
         super('GameScene');
     }
 
-    create(data: { difficulty?: string }) {
+    create(data: { difficulty?: string; mode?: GameMode }) {
         console.log('GameScene create called');
         
         // Reset game state
         this.isGameOver = false;
         this.currentWord = null;
+        this.currentEquation = null;
+        
+        // Get game mode from data or registry
+        this.gameMode = data.mode || this.registry.get('gameMode') || GameMode.Spell;
         
         // Get reference to UI scene
         this.uiScene = this.scene.get('UIScene') as UIScene;
         
-        // Get difficulty settings from UI scene
-        const difficultySettings = this.uiScene.getDifficultySettings();
+        // Get difficulty settings from UI scene or registry
+        const difficultySettings = this.uiScene?.getDifficultySettings?.() || this.registry.get('settings');
+        
+        if (!difficultySettings) {
+            console.error('No difficulty settings found!');
+            return;
+        }
         
         // Initialize managers
         this.effectManager = new EffectManager(this);
         this.physicsManager = new PhysicsManager(this);
-        this.wordManager = new WordManager(
-            this,
-            this.physicsManager,
-            difficultySettings
-        );
         
-        // Initialize effect manager
-        this.effectManager = new EffectManager(this);
+        // Initialize mode-specific manager
+        if (this.gameMode === GameMode.Math) {
+            this.mathManager = new MathManager(
+                this,
+                this.physicsManager,
+                difficultySettings as any
+            );
+            
+            // Create ships for Math mode
+            this.createShips();
+            
+            console.log('Game started in Math mode');
+        } else {
+            this.wordManager = new WordManager(
+                this,
+                this.physicsManager,
+                difficultySettings as any
+            );
+            console.log('Game started in Spell mode');
+        }
         
-        console.log('Game started with difficulty:', data.difficulty || 'default');
+        console.log('Game started with difficulty:', data.difficulty || 'default', 'mode:', this.gameMode);
 
         // Set up world bounds with collision events
         const { width, height } = this.cameras.main;
@@ -174,27 +208,58 @@ export class GameScene extends Scene {
 
 
     private spawnNextWord() {
-        if (this.isGameOver || this.currentWord) return; // Don't spawn if we already have a word
+        if (this.isGameOver) return;
+        
+        // Don't spawn if we already have an active word or equation
+        if (this.gameMode === GameMode.Math) {
+            if (this.currentEquation) return;
+        } else {
+            if (this.currentWord) return;
+        }
 
-        console.log('Spawning new word...');
-        // Create a new word
-        this.currentWord = this.wordManager.createWord();
+        console.log('Spawning new word/equation...');
+        
+        if (this.gameMode === GameMode.Math) {
+            // Create a new math equation
+            this.currentEquation = this.mathManager.createEquation();
+        } else {
+            // Create a new word
+            this.currentWord = this.wordManager.createWord();
+        }
         
         // Update next word display
         this.updateNextWordDisplay();
     }
 
     private updateNextWordDisplay() {
-        if (this.headerNextWordText && this.wordManager) {
+        if (!this.headerNextWordText) return;
+        
+        let nextText: string | null = null;
+        
+        if (this.gameMode === GameMode.Math && this.mathManager) {
+            nextText = this.mathManager.getNextEquation();
+        } else if (this.wordManager) {
             const nextWord = this.wordManager.getNextWord();
-            this.headerNextWordText.setText(nextWord ? nextWord.toUpperCase() : '');
+            nextText = nextWord ? nextWord.toUpperCase() : '';
         }
+        
+        this.headerNextWordText.setText(nextText || '');
     }
 
 
 
     private handleKeyPress(event: KeyboardEvent) {
-        if (this.isGameOver || !this.currentWord) return;
+        if (this.isGameOver) return;
+
+        if (this.gameMode === GameMode.Math) {
+            this.handleMathKeyPress(event);
+        } else {
+            this.handleSpellKeyPress(event);
+        }
+    }
+
+    private handleSpellKeyPress(event: KeyboardEvent) {
+        if (!this.currentWord) return;
 
         const key = event.key.toLowerCase();
         
@@ -215,6 +280,280 @@ export class GameScene extends Scene {
         }
     }
 
+    private handleMathKeyPress(event: KeyboardEvent) {
+        if (!this.currentEquation) return;
+
+        const key = event.key;
+        
+        // Only process digit keys
+        if (!/^[0-9]$/.test(key)) return;
+
+        const { answer, answerIndex } = this.currentEquation;
+        
+        // Check if we're still filling in the answer
+        if (answerIndex >= answer.length) return;
+
+        const expectedDigit = answer[answerIndex];
+        
+        if (key === expectedDigit) {
+            // Correct digit!
+            this.handleCorrectDigit();
+        } else {
+            // Wrong digit - freeze the equation
+            this.handleWrongEquation();
+        }
+    }
+
+    private handleCorrectDigit() {
+        if (!this.currentEquation) return;
+
+        const { blocks, text, answer, answerIndex } = this.currentEquation;
+        
+        // Find the blank block to fill
+        const blankBlockIndex = text.length + answerIndex;
+        const blankBlock = blocks[blankBlockIndex];
+        
+        if (!blankBlock) return;
+
+        // Update the block to show the digit
+        const container = blankBlock.gameObject as Phaser.GameObjects.Container;
+        if (container && container.list && container.list.length > 1) {
+            const textObj = container.list[1] as Phaser.GameObjects.Text;
+            if (textObj && textObj.setText) {
+                textObj.setText(answer[answerIndex]);
+                textObj.setStyle({ color: '#0f0' }); // Green for correct
+            }
+        }
+
+        // Mark this blank as filled
+        (blankBlock as any).isBlank = false;
+        
+        // Increment answer index
+        this.currentEquation.answerIndex++;
+        
+        // Add score for correct digit
+        this.events.emit('addScore', 10);
+        
+        // Check if answer is complete
+        if (this.currentEquation.answerIndex >= answer.length) {
+            // All digits correct - equation complete!
+            this.handleEquationComplete();
+        } else {
+            // Highlight next blank
+            const nextBlankIndex = text.length + this.currentEquation.answerIndex;
+            const nextBlank = blocks[nextBlankIndex];
+            if (nextBlank) {
+                const nextContainer = nextBlank.gameObject as Phaser.GameObjects.Container;
+                if (nextContainer && nextContainer.list && nextContainer.list.length > 1) {
+                    const nextText = nextContainer.list[1] as Phaser.GameObjects.Text;
+                    if (nextText && nextText.setStyle) {
+                        nextText.setStyle({ color: '#ffff00' }); // Yellow highlight
+                    }
+                }
+            }
+        }
+    }
+
+    private handleEquationComplete() {
+        if (!this.currentEquation) return;
+
+        const lastBlock = this.currentEquation.blocks[this.currentEquation.blocks.length - 1];
+        
+        // Award bonus for completing equation
+        this.events.emit('addScore', 50);
+        
+        // In Math mode, launch equation back at enemy ship
+        if (this.gameMode === GameMode.Math && this.enemyShip) {
+            // Calculate direction to enemy ship
+            const dx = this.enemyShip.x - lastBlock.position.x;
+            const dy = this.enemyShip.y - lastBlock.position.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // Set return velocity (faster than incoming)
+            const returnSpeed = 8;
+            const velocityX = (dx / distance) * returnSpeed;
+            const velocityY = (dy / distance) * returnSpeed;
+            
+            // Apply velocity to all blocks to send them back
+            this.currentEquation.blocks.forEach((block) => {
+                this.matter.body.setVelocity(block, {
+                    x: velocityX,
+                    y: velocityY
+                });
+                
+                // Change block color to green to show it's returning
+                const container = block.gameObject as Phaser.GameObjects.Container;
+                if (container && container.list && container.list.length > 1) {
+                    const textObj = container.list[1] as Phaser.GameObjects.Text;
+                    if (textObj && textObj.setStyle) {
+                        textObj.setStyle({ color: '#00ff00' });
+                    }
+                }
+            });
+            
+            // Mark equation as returning
+            (this.currentEquation as any).isReturning = true;
+            
+            // Clear current equation so new one can spawn
+            this.currentEquation = null;
+            this.spawnNextWord();
+        } else {
+            // Original behavior for Spell mode
+            // Play spectacular completion effect
+            this.playWordCompletionEffect(
+                lastBlock.position.x,
+                lastBlock.position.y,
+                `${this.currentEquation.text}${this.currentEquation.answer}`
+            );
+            
+            // Burn away all blocks
+            this.currentEquation.blocks.forEach((block, index) => {
+                this.time.delayedCall(index * 50, () => {
+                    if (!block || !block.position) return;
+                    
+                    this.effectManager.playBurnEffect(block.position.x, block.position.y);
+                    const container = block.gameObject as Phaser.GameObjects.Container;
+                    if (container && container.active && container.scene) {
+                        // Kill any existing tweens on this container
+                        this.tweens.killTweensOf(container);
+                        
+                        // Destroy the physics body immediately
+                        this.physicsManager.destroyBody(block as Matter.Body);
+                        
+                        // Remove the physics body reference
+                        (container as any).body = undefined;
+                        
+                        // Then tween just alpha and rotation (no scale)
+                        this.tweens.add({
+                            targets: container,
+                            alpha: 0,
+                            duration: 300,
+                            ease: 'Power2',
+                            onComplete: () => {
+                                if (container && container.active) {
+                                    container.destroy();
+                                }
+                            }
+                        });
+                    } else {
+                        if (block) {
+                            this.physicsManager.destroyBody(block as Matter.Body);
+                        }
+                    }
+                });
+            });
+            
+            // Clear current equation and spawn next
+            this.currentEquation = null;
+            this.spawnNextWord();
+        }
+    }
+
+    private handleWrongEquation() {
+        if (!this.currentEquation) return;
+        
+        // In Math mode, wrong answers damage the player
+        if (this.gameMode === GameMode.Math) {
+            // Calculate damage (10 damage per wrong answer)
+            const damage = 10;
+            this.playerHealth = Math.max(0, this.playerHealth - damage);
+            
+            // Update health display
+            this.events.emit('updateHealth', {
+                playerHealth: this.playerHealth,
+                playerMaxHealth: this.maxHealth,
+                enemyHealth: this.enemyHealth,
+                enemyMaxHealth: this.maxHealth
+            });
+            
+            // Play explosion effect on all blocks
+            this.currentEquation.blocks.forEach((block, index) => {
+                if (!block || !block.position) return; // Skip if block is invalid
+                
+                this.time.delayedCall(index * 30, () => {
+                    if (!block || !block.position) return; // Check again before effect
+                    
+                    this.effectManager.playExplosionEffect(block.position.x, block.position.y);
+                    const container = block.gameObject as Phaser.GameObjects.Container;
+                    if (container && container.active && container.scene) {
+                        // Kill any existing tweens on this container
+                        this.tweens.killTweensOf(container);
+                        
+                        // Destroy the physics body immediately
+                        this.physicsManager.destroyBody(block as Matter.Body);
+                        
+                        // Remove the physics body reference
+                        (container as any).body = undefined;
+                        
+                        // Then tween just alpha and rotation (no scale)
+                        this.tweens.add({
+                            targets: container,
+                            alpha: 0,
+                            duration: 300,
+                            ease: 'Power2',
+                            onComplete: () => {
+                                if (container && container.active) {
+                                    container.destroy();
+                                }
+                            }
+                        });
+                    } else {
+                        if (block) {
+                            this.physicsManager.destroyBody(block as Matter.Body);
+                        }
+                    }
+                });
+            });
+            
+            // Shake player ship
+            if (this.playerShip && this.playerShip.active) {
+                const originalX = this.playerShip.x;
+                this.tweens.add({
+                    targets: this.playerShip,
+                    x: originalX + 10,
+                    duration: 50,
+                    yoyo: true,
+                    repeat: 3,
+                    ease: 'Power2'
+                });
+            }
+            
+            // Clear the current equation
+            this.currentEquation = null;
+            
+            // Check for game over
+            if (this.playerHealth <= 0) {
+                this.gameOver();
+                return;
+            }
+            
+            // Add a small delay before spawning the next equation
+            this.time.delayedCall(500, () => {
+                if (!this.isGameOver) {
+                    this.spawnNextWord();
+                }
+            });
+        } else {
+            // Original behavior for Spell mode
+            // Freeze all blocks in the equation
+            this.currentEquation.blocks.forEach(block => {
+                if (block) {
+                    this.freezeBlock(block);
+                }
+            });
+            
+            // Clear the current equation
+            this.currentEquation = null;
+            
+            // Add a small delay before spawning the next equation
+            this.time.delayedCall(270, () => {
+                if (!this.isGameOver) {
+                    this.spawnNextWord();
+                }
+            });
+        }
+    }
+
 
     private handleCorrectKey() {
         if (!this.currentWord) return;
@@ -229,17 +568,26 @@ export class GameScene extends Scene {
         this.effectManager.playBurnEffect(block.position.x, block.position.y);
         
         // Create a disappearing animation for the block
-        if (container) {
+        if (container && container.active && container.scene) {
+            // Kill any existing tweens on this container
+            this.tweens.killTweensOf(container);
+            
+            // Destroy the physics body immediately
+            this.physicsManager.destroyBody(block as Matter.Body);
+            
+            // Remove the physics body reference
+            (container as any).body = undefined;
+            
+            // Then tween just alpha and rotation (no scale to avoid body updates)
             this.tweens.add({
                 targets: container,
                 alpha: 0,
-                scaleX: 1.5,
-                scaleY: 1.5,
                 duration: 300,
                 ease: 'Power2',
                 onComplete: () => {
-                    // Use PhysicsManager to properly destroy the block and its constraints
-                    this.physicsManager.destroyBody(block as Matter.Body);
+                    if (container && container.active) {
+                        container.destroy();
+                    }
                 }
             });
         } else {
@@ -375,6 +723,11 @@ export class GameScene extends Scene {
     }
 
     private handleWrongKey() {
+        if (this.gameMode === GameMode.Math) {
+            this.handleWrongEquation();
+            return;
+        }
+        
         if (!this.currentWord) return;
         
         // Convert remaining blocks to frozen/inactive state
@@ -476,53 +829,71 @@ export class GameScene extends Scene {
                     continue;
                 }
                 
-                // Check for bottom collisions
-                const isBodyABottomCollision = this.isBottomCollision(bodyA, bodyB);
-                const isBodyBBottomCollision = this.isBottomCollision(bodyB, bodyA);
-                
-                if (isBodyABottomCollision || isBodyBBottomCollision) {
-                    // Determine which body is the block (not the bottom boundary)
-                    const blockBody = bodyA.label === 'Bounds Bottom' ? bodyB : bodyA;
+                // Math mode: Check for ship collisions
+                if (this.gameMode === GameMode.Math) {
+                    // Check if equation hit player ship (wrong answer damage)
+                    const hitPlayerShip = this.checkShipCollision(bodyA, bodyB, this.playerShip);
+                    if (hitPlayerShip) {
+                        this.handleEquationHitPlayerShip(hitPlayerShip);
+                        continue;
+                    }
                     
-                    // Only handle blocks that have game objects (actual letter blocks)
-                    if (blockBody.gameObject) {
-                        console.log('Block hit the bottom - handling collision');
+                    // Check if returning equation hit enemy ship
+                    const hitEnemyShip = this.checkShipCollision(bodyA, bodyB, this.enemyShip);
+                    if (hitEnemyShip) {
+                        this.handleEquationHitEnemyShip(hitEnemyShip);
+                        continue;
+                    }
+                } else {
+                    // Spell mode: Original collision detection
+                    // Check for bottom collisions
+                    const isBodyABottomCollision = this.isBottomCollision(bodyA, bodyB);
+                    const isBodyBBottomCollision = this.isBottomCollision(bodyB, bodyA);
+                    
+                    if (isBodyABottomCollision || isBodyBBottomCollision) {
+                        // Determine which body is the block (not the bottom boundary)
+                        const blockBody = bodyA.label === 'Bounds Bottom' ? bodyB : bodyA;
                         
-                        // Check if this block is part of the current active word
-                        if (this.currentWord && this.currentWord.blocks) {
-                            const isBlockInCurrentWord = this.currentWord.blocks.some(block => block === blockBody);
+                        // Only handle blocks that have game objects (actual letter blocks)
+                        if (blockBody.gameObject) {
+                            console.log('Block hit the bottom - handling collision');
                             
-                            if (isBlockInCurrentWord) {
-                                console.log('Active word hit the bottom - freezing entire word');
-                                // Active word hit the bottom, freeze the entire word
-                                this.handleWrongKey();
-                                break; // Exit after handling the collision
+                            // Check if this block is part of the current active word
+                            if (this.currentWord && this.currentWord.blocks) {
+                                const isBlockInCurrentWord = this.currentWord.blocks.some(block => block === blockBody);
+                                
+                                if (isBlockInCurrentWord) {
+                                    console.log('Active word hit the bottom - freezing entire word');
+                                    // Active word hit the bottom, freeze the entire word
+                                    this.handleWrongKey();
+                                    break; // Exit after handling the collision
+                                }
+                            }
+                            
+                            // If it's not part of current word, it might be a frozen block
+                            // Make sure it's properly marked as frozen and has correct velocity
+                            if (!(blockBody as any).isFrozen) {
+                                console.log('Unfrozen block hit bottom - marking as frozen');
+                                this.freezeBlock(blockBody);
                             }
                         }
-                        
-                        // If it's not part of current word, it might be a frozen block
-                        // Make sure it's properly marked as frozen and has correct velocity
-                        if (!(blockBody as any).isFrozen) {
-                            console.log('Unfrozen block hit bottom - marking as frozen');
-                            this.freezeBlock(blockBody);
-                        }
                     }
-                }
-                
-                // Check for word-to-word collisions (active word hitting frozen blocks)
-                const isWordToWordCollision = this.isWordToWordCollision(bodyA, bodyB);
-                if (isWordToWordCollision) {
-                    console.log('Active word hit frozen blocks - freezing current word');
-                    this.handleWrongKey();
-                    break; // Exit after handling the collision
-                }
-                
-                // Check for top collisions (game over condition)
-                const isTopCollision = this.isTopCollision(bodyA, bodyB);
-                if (isTopCollision) {
-                    console.log('Dead letter hit the top - GAME OVER');
-                    this.gameOver();
-                    break;
+                    
+                    // Check for word-to-word collisions (active word hitting frozen blocks)
+                    const isWordToWordCollision = this.isWordToWordCollision(bodyA, bodyB);
+                    if (isWordToWordCollision) {
+                        console.log('Active word hit frozen blocks - freezing current word');
+                        this.handleWrongKey();
+                        break; // Exit after handling the collision
+                    }
+                    
+                    // Check for top collisions (game over condition)
+                    const isTopCollision = this.isTopCollision(bodyA, bodyB);
+                    if (isTopCollision) {
+                        console.log('Dead letter hit the top - GAME OVER');
+                        this.gameOver();
+                        break;
+                    }
                 }
                 
                 // Check if any block is too high (game over)
@@ -532,6 +903,125 @@ export class GameScene extends Scene {
             }
         } catch (error) {
             console.error('Error in handleCollisions:', error);
+        }
+    }
+    
+    /**
+     * Check if a block collided with a ship
+     */
+    private checkShipCollision(bodyA: BlockBody, bodyB: BlockBody, ship?: Phaser.GameObjects.Image): BlockBody | null {
+        if (!ship) return null;
+        
+        // Check if either body is near the ship position
+        const shipBounds = ship.getBounds();
+        
+        const isBodyANearShip = bodyA.gameObject && 
+            bodyA.position.x >= shipBounds.left && 
+            bodyA.position.x <= shipBounds.right &&
+            bodyA.position.y >= shipBounds.top &&
+            bodyA.position.y <= shipBounds.bottom;
+            
+        const isBodyBNearShip = bodyB.gameObject && 
+            bodyB.position.x >= shipBounds.left && 
+            bodyB.position.x <= shipBounds.right &&
+            bodyB.position.y >= shipBounds.top &&
+            bodyB.position.y <= shipBounds.bottom;
+        
+        if (isBodyANearShip) return bodyA;
+        if (isBodyBNearShip) return bodyB;
+        
+        return null;
+    }
+    
+    /**
+     * Handle equation hitting player ship (damage)
+     */
+    private handleEquationHitPlayerShip(block: BlockBody) {
+        // Only handle if this is part of current equation and not returning
+        if (!this.currentEquation) return;
+        
+        const isPartOfCurrentEquation = this.currentEquation.blocks.some(b => b === block);
+        const isReturning = (this.currentEquation as any).isReturning;
+        
+        if (!isPartOfCurrentEquation || isReturning) return;
+        
+        console.log('Equation hit player ship!');
+        
+        // Trigger wrong equation handler (already handles damage)
+        this.handleWrongEquation();
+    }
+    
+    /**
+     * Handle returning equation hitting enemy ship
+     */
+    private handleEquationHitEnemyShip(block: BlockBody) {
+        // Find which equation this block belongs to
+        // Since we cleared currentEquation, we need to track returning equations differently
+        // For now, check if block is marked as returning
+        const container = block.gameObject as Phaser.GameObjects.Container;
+        if (!container) return;
+        
+        // Check if any text is green (returning equation marker)
+        let isReturning = false;
+        if (container.list && container.list.length > 1) {
+            const textObj = container.list[1] as Phaser.GameObjects.Text;
+            if (textObj && textObj.style && textObj.style.color === '#00ff00') {
+                isReturning = true;
+            }
+        }
+        
+        if (!isReturning) return;
+        
+        console.log('Returning equation hit enemy ship!');
+        
+        // Damage enemy
+        const damage = 20;
+        this.enemyHealth = Math.max(0, this.enemyHealth - damage);
+        
+        // Update health display
+        this.events.emit('updateHealth', {
+            playerHealth: this.playerHealth,
+            playerMaxHealth: this.maxHealth,
+            enemyHealth: this.enemyHealth,
+            enemyMaxHealth: this.maxHealth
+        });
+        
+        // Play explosion on enemy ship
+        if (this.enemyShip) {
+            this.effectManager.playExplosionEffect(this.enemyShip.x, this.enemyShip.y);
+            this.tweens.add({
+                targets: this.enemyShip,
+                x: this.enemyShip.x - 10,
+                duration: 50,
+                yoyo: true,
+                repeat: 3,
+                ease: 'Power2'
+            });
+        }
+        
+        // Destroy all blocks in vicinity (same equation)
+        const allBodies = this.matter.world.getAllBodies();
+        allBodies.forEach(body => {
+            const typedBody = body as BlockBody;
+            if (!typedBody.gameObject || !typedBody.position) return;
+            
+            const dist = Math.sqrt(
+                Math.pow(typedBody.position.x - block.position.x, 2) +
+                Math.pow(typedBody.position.y - block.position.y, 2)
+            );
+            
+            if (dist < 200) { // Same equation
+                if (typedBody.position) {
+                    this.effectManager.playExplosionEffect(typedBody.position.x, typedBody.position.y);
+                }
+                this.physicsManager.destroyBody(typedBody as Matter.Body);
+            }
+        });
+        
+        // Check for victory
+        if (this.enemyHealth <= 0) {
+            console.log('Enemy defeated! Victory!');
+            this.gameOver(); // For now, treat as game over (could add victory screen later)
         }
     }
 
@@ -558,16 +1048,29 @@ export class GameScene extends Scene {
     }
 
     private isWordToWordCollision(bodyA: BlockBody, bodyB: BlockBody): boolean {
-        // Only check if we have a current active word
-        if (!this.currentWord || !this.currentWord.blocks) {
+        // Check if we have a current active word or equation
+        const hasActiveWord = this.currentWord && this.currentWord.blocks;
+        const hasActiveEquation = this.currentEquation && this.currentEquation.blocks;
+        
+        if (!hasActiveWord && !hasActiveEquation) {
             return false;
         }
         
-        // Check if one body is from the current word and the other is frozen
-        const isBodyAInCurrentWord = this.currentWord.blocks.some(block => block === bodyA);
-        const isBodyBInCurrentWord = this.currentWord.blocks.some(block => block === bodyB);
+        // Check if one body is from the current word/equation and the other is frozen
+        let isBodyAInCurrent = false;
+        let isBodyBInCurrent = false;
         
-        // Check if either body is frozen (from a previous word)
+        if (hasActiveWord) {
+            isBodyAInCurrent = this.currentWord!.blocks.some(block => block === bodyA);
+            isBodyBInCurrent = this.currentWord!.blocks.some(block => block === bodyB);
+        }
+        
+        if (hasActiveEquation) {
+            isBodyAInCurrent = isBodyAInCurrent || this.currentEquation!.blocks.some(block => block === bodyA);
+            isBodyBInCurrent = isBodyBInCurrent || this.currentEquation!.blocks.some(block => block === bodyB);
+        }
+        
+        // Check if either body is frozen (from a previous word/equation)
         const isBodyAFrozen = (bodyA as any).isFrozen === true;
         const isBodyBFrozen = (bodyB as any).isFrozen === true;
         
@@ -587,12 +1090,12 @@ export class GameScene extends Scene {
         }
         
         // Collision detected if:
-        // - One body is from current word AND the other is frozen
+        // - One body is from current word/equation AND the other is frozen
         // - Both bodies have game objects (are actual letter blocks, not walls)
         // - Frozen block is not in spawn area (has settled lower)
         const collision = (
-            (isBodyAInCurrentWord && isBodyBFrozen && !!bodyB.gameObject) ||
-            (isBodyBInCurrentWord && isBodyAFrozen && !!bodyA.gameObject)
+            (isBodyAInCurrent && isBodyBFrozen && !!bodyB.gameObject) ||
+            (isBodyBInCurrent && isBodyAFrozen && !!bodyA.gameObject)
         );
         
         return collision;
@@ -703,26 +1206,23 @@ export class GameScene extends Scene {
             this.time.delayedCall(explosionDelay, () => {
                 // Check if container is still valid before animating
                 if (blockData.container && blockData.container.active && blockData.container.scene) {
-                    // First, immediately detach the physics body from the container to prevent conflicts
-                    if (blockData.body && blockData.container.body) {
-                        blockData.container.body = null;
-                    }
+                    // Kill any existing tweens on this container
+                    this.tweens.killTweensOf(blockData.container);
                     
                     // Destroy the physics body immediately to prevent tween conflicts
                     if (blockData.body && this.physicsManager) {
                         this.physicsManager.destroyBody(blockData.body);
                     }
                     
-                    // Now safely animate just the visual container
-                    // Additional safety check before creating tween
+                    // Remove the physics body reference
+                    (blockData.container as any).body = undefined;
+                    
+                    // Now safely animate just the visual container (alpha and angle only)
                     if (blockData.container && blockData.container.active && blockData.container.scene && this.tweens) {
                         this.tweens.add({
                             targets: blockData.container,
                             alpha: 0,
-                            scaleX: 2,
-                            scaleY: 2,
-                            rotation: (Math.random() - 0.5) * Math.PI,
-                            duration: 53,
+                            duration: 500,
                             ease: 'Power2',
                             onComplete: () => {
                                 // Destroy the visual container after animation
@@ -890,6 +1390,48 @@ export class GameScene extends Scene {
             stroke: '#000000',
             strokeThickness: 2
         }).setDepth(20);
+    }
+    
+    /**
+     * Create player and enemy ships for Math mode
+     */
+    private createShips() {
+        const { width, height } = this.cameras.main;
+        
+        // Initialize health
+        this.playerHealth = this.maxHealth;
+        this.enemyHealth = this.maxHealth;
+        
+        // Create player ship at bottom center
+        const playerX = width / 2;
+        const playerY = height - 100;
+        
+        this.playerShip = this.add.image(playerX, playerY, 'player_ship_processed');
+        this.playerShip.setScale(0.2); // 20% size
+        this.playerShip.setDepth(100);
+        
+        // Create enemy ship at top center  
+        const enemyX = width / 2;
+        const enemyY = 120;
+        
+        this.enemyShip = this.add.image(enemyX, enemyY, 'enemy_ship_processed');
+        this.enemyShip.setScale(0.2); // 20% size
+        this.enemyShip.setDepth(100);
+        
+        // Update MathManager with ship positions
+        if (this.mathManager) {
+            this.mathManager.setShipPositions(enemyX, enemyY, playerX, playerY);
+        }
+        
+        // Notify UI scene about health
+        this.events.emit('updateHealth', {
+            playerHealth: this.playerHealth,
+            playerMaxHealth: this.maxHealth,
+            enemyHealth: this.enemyHealth,
+            enemyMaxHealth: this.maxHealth
+        });
+        
+        console.log('Ships created at:', { playerX, playerY, enemyX, enemyY });
     }
 
     /**
